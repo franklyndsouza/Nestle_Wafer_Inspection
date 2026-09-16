@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<TcSmItem xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4026.23" ClassName="CDevEthernetProtocolEipSlaveDef" SubType="139">
+	<Device Id="1" Disabled="true" DevType="139" AmsPort="28673" AmsNetId="10.201.62.134.2.1" RemoteName="Device 1 (TC3 EIP Adapter)">
+		<Name>__FILENAME__</Name>
+		<AddressInfo>
+			<Pnp>
+				<DeviceDesc></DeviceDesc>
+				<DeviceName></DeviceName>
+				<DeviceData>000000000000</DeviceData>
+			</Pnp>
+		</AddressInfo>
+		<Image Id="1" AddrType="1" ImageType="3">
+			<Name>Device 1 (TC3 EIP Adapter)-Image</Name>
+		</Image>
+		<Box File="Box 1 (TC EtherNet%_2FIP Slave).xti" Id="1"/>
+		<Ethernet/>
+		<EtherNetIPSlaveDev>
+			<Ethernet/>
+		</EtherNetIPSlaveDev>
+	</Device>
+</TcSmItem>

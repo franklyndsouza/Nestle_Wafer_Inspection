@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<TcSmItem xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4026.20" ClassName="CNestedPlcProjDef">
+	<Project GUID="{31BDED30-2CA5-4E79-96F0-D8AE26BD08C5}" Name="Inspection_Control" PrjFilePath="..\..\Inspection_Control\Inspection_Control.plcproj" TmcFilePath="..\..\Inspection_Control\Inspection_Control.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e" SymbolicMapping="true">
+		<Instance File="Inspection_Control Instance.xti"/>
+	</Project>
+</TcSmItem>

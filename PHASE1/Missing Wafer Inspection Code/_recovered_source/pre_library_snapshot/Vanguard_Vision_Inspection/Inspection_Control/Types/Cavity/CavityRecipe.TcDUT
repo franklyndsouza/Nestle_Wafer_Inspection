@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <DUT Name="CavityRecipe" Id="{003113f9-dc03-48b8-ab5b-28c10e66496e}">
+    <Declaration><![CDATA[TYPE CavityRecipe :
+STRUCT
+	LevelReference1 : Coordinate;
+	LevelReference2 : Coordinate;
+	MaxDifferenceBetweenLevels : LREAL;
+	CavityWidth : UDINT;
+	CavityLength : UDINT;
+	EmptyCavityDepth : UDINT;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

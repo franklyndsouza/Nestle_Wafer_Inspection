@@ -1,0 +1,1201 @@
+### __shared_data_storage_string_table__.auxiliary (394)
+Conversions6$738bea1e-99bb-4f04-90bb-a7a567e74e3a7$21af5390-2942-461a-bf89-951aaf6999f18$231d054b-b0d0-470b-b22c-9fa2cd36bf049	BYTE_REAL:$829a18f2-c514-4f6e-9634-1df173429203;$2db5746d-d284-4425-9f7f-2663a34b0ebc<$a9ed5b7e-75c5-4651-af16-d2c27e98cb94=ZTYPE BYTE_REAL :
+UNION
+	aREAL : real;
+	theBytes : ARRAY[0..3] OF BYTE;
+END_UNION
+END_TYPE
+>1231d054b-b0d0-470b-b22c-9fa2cd36bf04_Decl_LineIds?
+
+### __shared_data_storage_string_table__.auxiliary (637)
+7@$a816540d-439d-4111-8f99-72c9d90aae2bABYTE_STRING20BgTYPE BYTE_STRING20 :
+UNION
+	aString : STRING(20);
+	theBytes : ARRAY[0..19] OF BYTE;
+END_UNION
+END_TYPE
+C1a816540d-439d-4111-8f99-72c9d90aae2b_Decl_LineIdsD$1f4f478d-5866-4cd0-a4e9-b8b943033465E
+BYTE_UDINTF]TYPE BYTE_UDINT :
+UNION
+	aUDINT : UDINT;
+	theBytes : ARRAY[0..3] OF BYTE;
+END_UNION
+END_TYPE
+G11f4f478d-5866-4cd0-a4e9-b8b943033465_Decl_LineIdsH$8c4a6e8d-abe3-4db6-ae50-0dd26672e8c0I	BYTE_UINTJZTYPE BYTE_UINT :
+UNION
+	aUINT : UINT;
+	theBytes : ARRAY[0..1] OF BYTE;
+END_UNION
+END_TYPE
+K18c4a6e8d-abe3-4db6-ae50-0dd26672e8c0_Decl_LineIdsL$47243441-0327-45ac-81c2-ce097f3c7efbM
+
+### __shared_data_storage_string_table__.auxiliary (324)
+FUNCTION_BLOCK ModeController EXTENDS CyclicComponent IMPLEMENTS I_ModeController
+VAR
+	ModeManager : FB_PMLUnitModeManager;
+	_StateController : I_StateController;
+	_NumberOfModes : INT := 3;
+	_production : I_Cyclic;
+	_manual : I_Cyclic;
+	_maintainence : I_Cyclic;
+END_VAR
+W1610bb4e2-2408-4492-b35e-cb37270b88c3_Decl_LineIdsX
+
+### __shared_data_storage_string_table__.auxiliary (583)
+IF ModeManager.eModeStatus = 0 THEN
+	ModeManager.eModeCommand := 1;
+END_IF
+
+IF _StateController.PMLState = E_PMLState.Undefined AND ModeManager.eModeStatus <> 0 THEN
+	_StateController.RequestAbort();
+END_IF
+
+IF ModeManager.eModeCommand <> ModeManager.eModeStatus THEN
+	ModeManager.bExecute := TRUE;
+ELSE
+	ModeManager.bExecute := FALSE;
+END_IF
+
+ModeManager(eState:= _StateController.PMLState);
+
+CASE ModeManager.eModeStatus OF
+	1:
+		_production.CyclicLogic();
+	2:
+		_maintainence.CyclicLogic();
+	3:
+		_manual.CyclicLogic();
+END_CASE^1ce6263d1-2bdb-4a3d-949c-fe9ba8b396b7_Impl_LineIds_
+
+### __shared_data_storage_string_table__.auxiliary (109)
+METHOD CyclicLogic
+`1ce6263d1-2bdb-4a3d-949c-fe9ba8b396b7_Decl_LineIdsa$fe0723d5-2d4f-4461-b2dc-25d2e2bdc6d1b
+
+### __shared_data_storage_string_table__.auxiliary (766)
+//FB_Init is always available implicitly and it is used primarily for initialization.
+//The return value is not evaluated. For a specific influence, you can also declare the
+//methods explicitly and provide additional code there with the standard initialization
+//code. You can evaluate the return value.
+METHOD FB_Init: BOOL
+VAR_INPUT
+    bInitRetains: BOOL; // TRUE: the retain variables are initialized (reset warm / reset cold)
+    bInCopyCode: BOOL;  // TRUE: the instance will be copied to the copy code afterward (online change) 
+	Name : T_MaxString;
+	StateController : I_StateController;  
+	Production : I_Cyclic;
+	Manual : I_Cyclic;
+	Maintainence : I_Cyclic;
+END_VAR
+f1fe0723d5-2d4f-4461-b2dc-25d2e2bdc6d1_Decl_LineIdsg$825f4245-90b4-4330-93bf-3b79fcde1401h
+
+### __shared_data_storage_string_table__.auxiliary (117)
+VAR
+END_VAR
+s1eff10a7d-ea60-4fa2-99e7-d6ee308861bc_Decl_LineIdst$80412ada-62c2-413e-bbb0-49582cdb9b00uNumberOfModesv
+
+### __shared_data_storage_string_table__.auxiliary (122)
+Set~uIF NumberOfModes > 0 AND NumberOfModes < 31 THEN
+	_NumberOfModes := NumberOfModes;
+ELSE
+	_NumberOfModes := 3;
+END_IF
+
+
+### __shared_data_storage_string_table__.auxiliary (406)
+IF Mode <= 0 THEN
+	RETURN;
+END_IF
+
+IF Mode > _NumberOfModes THEN
+	RETURN;
+END_IF
+
+isModeChangeAllowed := _StateController.PMLState = E_PMLState.Aborted
+	OR _StateController.PMLState = E_PMLState.Idle
+	OR _StateController.PMLState = E_PMLState.Stopped
+	OR _StateController.PMLState = E_PMLState.held;
+
+IF NOT isModeChangeAllowed THEN
+	RETURN;
+END_IF	
+	
+ModeManager.eModeCommand := Mode;
+RequestMode := TRUE;
+
+### __shared_data_storage_string_table__.auxiliary (100)
+cMETHOD RequestMode : BOOL
+VAR_INPUT
+	Mode : DINT;
+END_VAR
+VAR
+	isModeChangeAllowed : bool;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (368)
+FUNCTION_BLOCK StateController EXTENDS CyclicComponent IMPLEMENTS I_StateController, I_Abortable, I_AbortedTransitions, I_CompletedTransitions, I_ExecuteTranisitons, I_HeldTransitions, I_IdleTransitions, I_Stoppable, I_StoppedTransitions, I_SuspendedTransitions
+VAR
+	PackMLSM : FB_PMLStateMachine;
+	_ModeController : I_ModeController;
+	_PMLState : E_PMLState;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (198)
+IF _ModeController.Mode = 0 THEN
+	RETURN;
+END_IF
+
+IF NOT IsCommandAllowed(RequestedCommand := E_PMLCommand.Abort) THEN
+	RETURN;
+END_IF
+
+PackMLSM.eCommand := E_PMLCommand.Abort;
+RequestAbort := TRUE;
+
+### __shared_data_storage_string_table__.auxiliary (53)
+4METHOD PUBLIC RequestAbort : BOOL
+VAR_INPUT
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (256)
+IF _ModeController.Mode = 0 THEN
+	RETURN;
+END_IF
+
+IF _PMLState = E_PMLState.Undefined THEN
+	RETURN;
+END_IF
+
+IF NOT IsCommandAllowed(RequestedCommand := E_PMLCommand.Clear) THEN
+	RETURN;
+END_IF
+
+PackMLSM.eCommand := E_PMLCommand.Clear;
+RequestClear := TRUE;
+
+### __shared_data_storage_string_table__.auxiliary (46)
+-METHOD RequestClear : BOOL
+VAR_INPUT
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (265)
+IF _ModeController.Mode = 0 THEN
+	RETURN;
+END_IF
+
+IF _PMLState = E_PMLState.Undefined THEN
+	RETURN;
+END_IF
+
+IF NOT IsCommandAllowed(RequestedCommand := E_PMLCommand.Complete) THEN
+	RETURN;
+END_IF
+
+PackMLSM.eCommand := E_PMLCommand.Complete;
+RequestComplete := TRUE;
+
+### __shared_data_storage_string_table__.auxiliary (49)
+0METHOD RequestComplete : BOOL
+VAR_INPUT
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (253)
+IF _ModeController.Mode = 0 THEN
+	RETURN;
+END_IF
+
+IF _PMLState = E_PMLState.Undefined THEN
+	RETURN;
+END_IF
+
+IF NOT IsCommandAllowed(RequestedCommand := E_PMLCommand.Hold) THEN
+	RETURN;
+END_IF
+
+PackMLSM.eCommand := E_PMLCommand.Hold;
+RequestHold := TRUE;
+
+### __shared_data_storage_string_table__.auxiliary (45)
+,METHOD RequestHold : BOOL
+VAR_INPUT
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (256)
+IF _ModeController.Mode = 0 THEN
+	RETURN;
+END_IF
+
+IF _PMLState = E_PMLState.Undefined THEN
+	RETURN;
+END_IF
+
+IF NOT IsCommandAllowed(RequestedCommand := E_PMLCommand.Reset) THEN
+	RETURN;
+END_IF
+
+PackMLSM.eCommand := E_PMLCommand.Reset;
+RequestReset := TRUE;
+
+### __shared_data_storage_string_table__.auxiliary (46)
+-METHOD RequestReset : BOOL
+VAR_INPUT
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (256)
+IF _ModeController.Mode = 0 THEN
+	RETURN;
+END_IF
+
+IF _PMLState = E_PMLState.Undefined THEN
+	RETURN;
+END_IF
+
+IF NOT IsCommandAllowed(RequestedCommand := E_PMLCommand.Start) THEN
+	RETURN;
+END_IF
+
+PackMLSM.eCommand := E_PMLCommand.Start;
+RequestStart := TRUE;
+
+### __shared_data_storage_string_table__.auxiliary (46)
+-METHOD RequestStart : BOOL
+VAR_INPUT
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (253)
+IF _ModeController.Mode = 0 THEN
+	RETURN;
+END_IF
+
+IF _PMLState = E_PMLState.Undefined THEN
+	RETURN;
+END_IF
+
+IF NOT IsCommandAllowed(RequestedCommand := E_PMLCommand.Stop) THEN
+	RETURN;
+END_IF
+
+PackMLSM.eCommand := E_PMLCommand.Stop;
+RequestStop := TRUE;
+
+### __shared_data_storage_string_table__.auxiliary (52)
+3METHOD PUBLIC RequestStop : BOOL
+VAR_INPUT
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (262)
+IF _ModeController.Mode = 0 THEN
+	RETURN;
+END_IF
+
+IF _PMLState = E_PMLState.Undefined THEN
+	RETURN;
+END_IF
+
+IF NOT IsCommandAllowed(RequestedCommand := E_PMLCommand.Suspend) THEN
+	RETURN;
+END_IF
+
+PackMLSM.eCommand := E_PMLCommand.Suspend;
+RequestSuspend := TRUE;
+
+### __shared_data_storage_string_table__.auxiliary (48)
+/METHOD RequestSuspend : BOOL
+VAR_INPUT
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (259)
+IF _ModeController.Mode = 0 THEN
+	RETURN;
+END_IF
+
+IF _PMLState = E_PMLState.Undefined THEN
+	RETURN;
+END_IF
+
+IF NOT IsCommandAllowed(RequestedCommand := E_PMLCommand.Unhold) THEN
+	RETURN;
+END_IF
+
+PackMLSM.eCommand := E_PMLCommand.Unhold;
+RequestUnhold := TRUE;
+
+### __shared_data_storage_string_table__.auxiliary (47)
+.METHOD RequestUnhold : BOOL
+VAR_INPUT
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (268)
+IF _ModeController.Mode = 0 THEN
+	RETURN;
+END_IF
+
+IF _PMLState = E_PMLState.Undefined THEN
+	RETURN;
+END_IF
+
+IF NOT IsCommandAllowed(RequestedCommand := E_PMLCommand.Unsuspend) THEN
+	RETURN;
+END_IF
+
+PackMLSM.eCommand := E_PMLCommand.Unsuspend;
+RequestUnsuspend := TRUE;
+
+### __shared_data_storage_string_table__.auxiliary (50)
+1METHOD RequestUnsuspend : BOOL
+VAR_INPUT
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (606)
+//FB_Init is always available implicitly and it is used primarily for initialization.
+//The return value is not evaluated. For a specific influence, you can also declare the
+//methods explicitly and provide additional code there with the standard initialization
+//code. You can evaluate the return value.
+METHOD FB_Init: BOOL
+VAR_INPUT
+    bInitRetains: BOOL; // TRUE: the retain variables are initialized (reset warm / reset cold)
+    bInCopyCode: BOOL;  // TRUE: the instance will be copied to the copy code afterward (online change)
+	Name		 : T_MaxString;
+	ModeController : I_ModeController;   
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (1781)
+CASE RequestedCommand OF
+    E_PMLCommand.Start:
+        IsCommandAllowed := (_PMLState = E_PMLState.Idle);
+    E_PMLCommand.Stop:
+        IsCommandAllowed := (_PMLState = E_PMLState.Starting
+							OR _pmlState = E_PMLState.Execute
+							OR _pmlState = E_PMLState.Holding
+							OR _pmlState = E_PMLState.Held
+							OR _pmlState = E_PMLState.Unholding
+							OR _pmlState = E_PMLState.Suspending
+							OR _pmlState = E_PMLState.Suspended
+							OR _pmlState = E_PMLState.Unsuspending
+							OR _pmlState = E_PMLState.Idle
+							OR _pmlState = E_PMLState.Resetting
+							OR _pmlState = E_PMLState.Starting
+							OR _pmlState = E_PMLState.Completing
+							OR _pmlState = E_PMLState.Completed);
+    E_PMLCommand.Hold:
+        IsCommandAllowed := _pmlState = E_PMLState.Execute
+							OR (_pmlState = E_PMLState.Suspended AND NOT (_ModeController.Mode = 3));
+    E_PMLCommand.Unhold:
+        IsCommandAllowed := _pmlState = E_PMLState.Held AND NOT (_ModeController.Mode = 3);
+    E_PMLCommand.Suspend:
+        IsCommandAllowed := (_pmlState = E_PMLState.Execute AND _ModeController.Mode = 1);
+    E_PMLCommand.Unsuspend:
+        IsCommandAllowed := (_pmlState = E_PMLState.Suspended AND _ModeController.Mode = 1);
+    E_PMLCommand.Reset:
+        IsCommandAllowed := (_pmlState = E_PMLState.Stopped
+							OR _pmlState = E_PMLState.Completed);
+    E_PMLCommand.Abort:
+        IsCommandAllowed := NOT (_pmlState = E_PMLState.Aborted
+           					OR _pmlState = E_PMLState.Aborting);
+    E_PMLCommand.Clear:
+        IsCommandAllowed := (_pmlState = E_PMLState.Aborted);
+	E_PMLCommand.Complete:
+		IsCommandAllowed := (_pmlState = E_PMLState.Execute 
+							OR _pmlState = E_PMLState.Held
+							OR _pmlState = E_PMLState.Suspended)
+							AND _ModeController.Mode = 1;
+END_CASE
+
+### __shared_data_storage_string_table__.auxiliary (92)
+[METHOD PRIVATE IsCommandAllowed : BOOL
+VAR_INPUT
+	RequestedCommand : E_PMLCommand;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (21)
+METHOD StateComplete
+
+
+### __shared_data_storage_string_table__.auxiliary (369)
+FUNCTION_BLOCK StateControllerHMI EXTENDS HmiFunction
+VAR
+	_stateMachine : I_StateController;
+	_modeController : I_ModeController;
+	NextAvailablePackMLCommands : NextAvailablePackMLCommands;
+	{ attribute 'TcHmiSymbol.AddSymbol' }
+	{ attribute 'TcHmiSymbol.AddSymbol.UserGroups' := '__SystemAdministrators,Admin' }
+	Statemachine_HMI : ST_PackMLStatemachine_HMI;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (2444)
+{warning disable C0196}
+IF _stateMachine = 0 OR _modeController = 0 THEN
+	RETURN;
+END_IF
+
+// Buttons
+Statemachine_HMI.StartPermissive := Statemachine_HMI.CurrentState = E_PMLState.Idle;
+Statemachine_HMI.StopPermissive	 := Statemachine_HMI.CurrentState <> E_PMLState.Aborted;
+Statemachine_HMI.ResetPermissive := Statemachine_HMI.CurrentState = E_PMLState.Aborted OR Statemachine_HMI.CurrentState = E_PMLState.Stopped;
+StartRT(CLK := Statemachine_HMI.StartPressed);
+
+IF StartRT.Q THEN
+	_stateMachine.RequestStart();
+END_IF
+
+StopRT(CLK := Statemachine_HMI.StopPressed);
+IF StopRT.Q THEN
+	IF Statemachine_HMI.CurrentState = E_PMLState.Stopped THEN
+		_stateMachine.RequestAbort();
+	ELSE
+		_stateMachine.RequestStop();
+	END_IF
+END_IF
+
+ResetRT(CLK := Statemachine_HMI.ResetPressed);
+IF ResetRT.Q THEN
+	IF Statemachine_HMI.CurrentState = E_PMLState.Aborted THEN
+		_stateMachine.RequestClear();
+	ELSE
+		_stateMachine.RequestReset();
+	END_IF
+END_IF
+
+// Controls Structs
+Statemachine_HMI.CurrentState := _stateMachine.PMLState;
+Statemachine_HMI.CurrentMode  := _modeController.Mode;
+Statemachine_HMI.Name		  := _Name;
+Statemachine_HMI.HmiEnabled	  := Enabled;
+IF Enabled THEN
+	IF Statemachine_HMI.ModeCommand <> 0 THEN
+		_modeController.RequestMode(Statemachine_HMI.ModeCommand);
+		LastModeChangeCommand		 := Statemachine_HMI.ModeCommand;
+		Statemachine_HMI.ModeCommand := 0;
+	END_IF
+
+	{warning disable C0196}
+	IF Statemachine_HMI.StateCommand <> 0 THEN
+		CASE Statemachine_HMI.StateCommand OF
+			E_PMLCommand.Abort:
+				_stateMachine.RequestAbort();
+			E_PMLCommand.Clear:
+				_stateMachine.RequestClear();
+			E_PMLCommand.Complete:
+				_stateMachine.RequestComplete();
+			E_PMLCommand.Hold:
+				_stateMachine.RequestHold();
+			E_PMLCommand.Reset:
+				_stateMachine.RequestReset();
+			E_PMLCommand.Start:
+				_stateMachine.RequestStart();
+			E_PMLCommand.Stop:
+				_stateMachine.RequestStop();
+			E_PMLCommand.Suspend:
+				_stateMachine.RequestSuspend();
+			E_PMLCommand.Unhold:
+				_stateMachine.RequestUnhold();
+			E_PMLCommand.Unsuspend:
+				_stateMachine.RequestUnsuspend();
+		END_CASE
+		{warning disable C0195}
+		LastStateChangeCommand		  := Statemachine_HMI.StateCommand;
+		Statemachine_HMI.StateCommand := 0;
+	END_IF
+ELSE
+	Statemachine_HMI.StateCommand := 0;
+	Statemachine_HMI.ModeCommand  := 0;
+END_IF
+
+Statemachine_HMI.NextAvailableCommands := NextAvailablePackMLCommands.GetCommands(Statemachine_HMI.CurrentMode, Statemachine_HMI.CurrentState);
+
+### __shared_data_storage_string_table__.auxiliary (156)
+METHOD CyclicLogic
+VAR_INST
+	LastModeChangeCommand  : DINT;
+	LastStateChangeCommand : UDINT;
+	StartRT : R_TRIG;
+	StopRT	: R_TRIG;
+	ResetRT : R_TRIG;
+END_VAR
+
+### __shared_data_storage_string_table__.auxiliary (639)
+(*FB_Init is always available implicitly and it is used primarily for initialization.
+The return value is not evaluated. For a specific influence, you can also declare the
+methods explicitly and provide additional code there with the standard initialization
+code. You can evaluate the return value.*)
+METHOD FB_Init : BOOL
+VAR_INPUT
+	(* TRUE: the retain variables are initialized (reset warm / reset cold)*)
+	bInitRetains	: BOOL;
+	(* TRUE: the instance will be copied to the copy code afterward (online change)   *)
+	bInCopyCode	: BOOL;
+	Name	: Core.T_MaxString;
+	StateMachine : I_StateController;
+	ModeControl : I_ModeController;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (123)
+zIF StateMachine = 0 OR ModeControl = 0 THEN
+	RETURN;
+END_IF
+_Statemachine := Statemachine;
+_modeController := ModeControl;
+
+### __shared_data_storage_string_table__.auxiliary (110)
+mMETHOD SetDependencies
+VAR_INPUT
+	StateMachine : I_StateController;
+	ModeControl : I_ModeController;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (46)
+-METHOD RequestAbort : BOOL
+VAR_INPUT
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (45)
+,METHOD RequestStop : BOOL
+VAR_INPUT
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (59)
+:METHOD RequestMode : BOOL
+VAR_INPUT
+	Mode : DINT;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (649)
+FUNCTION_BLOCK MaintainenceMode EXTENDS CyclicComponent
+VAR
+	IStateMachine : I_StateController;
+	Unused : State;
+	_Aborting : I_State := Unused;
+	_Aborted : I_State:= Unused;
+	_Clearing : I_State:= Unused;
+	_Stopping : I_State:= Unused;
+	_Stopped : I_State:= Unused;
+	_Resetting : I_State:= Unused;
+	_Idle : I_State:= Unused;
+	_Starting : I_State:= Unused;
+	_Execute : I_State:= Unused;
+	_Suspending : I_State:= Unused;
+	_Suspended : I_State:= Unused;
+	_Unsuspending : I_State:= Unused;
+	_Holding : I_State:= Unused;
+	_Held : I_State:= Unused;
+	_Unholding : I_State:= Unused;
+	_Completing : I_State:= Unused;
+	_Completed : I_State:= Unused;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (1013)
+CASE IStateMachine.PMLState OF
+//	E_PMLState.Undefined:
+	E_PMLState.Aborting :
+		IF _Aborting.Executing() THEN
+			IStateMachine.StateComplete();
+		END_IF
+	E_PMLState.Aborted :
+		_Aborted.Executing();
+	E_PMLState.Clearing :
+		IF _Clearing.Executing() THEN
+			IStateMachine.StateComplete();
+		END_IF
+	E_PMLState.Stopping:
+		IF _Stopping.Executing() THEN
+			IStateMachine.StateComplete();
+		END_IF
+	E_PMLState.Stopped:
+		_Stopped.Executing();
+	E_PMLState.Resetting:
+		IF _Resetting.Executing() THEN
+			IStateMachine.StateComplete();
+		END_IF
+	E_PMLState.Idle:
+		_Idle.Executing();
+	E_PMLState.Starting:
+		IF _Starting.Executing() THEN
+			IStateMachine.StateComplete();
+		END_IF
+	E_PMLState.Execute:
+		IF _Execute.Executing() THEN
+			IStateMachine.StateComplete();
+		END_IF
+	E_PMLState.Holding:
+		IF _Holding.Executing() THEN
+			IStateMachine.StateComplete();
+		END_IF
+	E_PMLState.Held:
+		_Held.Executing();
+	E_PMLState.Unholding:
+		IF _Unholding.Executing() THEN
+			IStateMachine.StateComplete();
+		END_IF
+END_CASE
+
+
+
+### __shared_data_storage_string_table__.auxiliary (606)
+(*FB_Init is always available implicitly and it is used primarily for initialization.
+The return value is not evaluated. For a specific influence, you can also declare the
+methods explicitly and provide additional code there with the standard initialization
+code. You can evaluate the return value.*)
+METHOD FB_Init : BOOL
+VAR_INPUT
+	(* TRUE: the retain variables are initialized (reset warm / reset cold)*)
+	bInitRetains	: BOOL;
+	(* TRUE: the instance will be copied to the copy code afterward (online change)   *)
+	bInCopyCode	: BOOL;
+	Name	: Core.T_MaxString;
+	StateMachine : I_StateController;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (643)
+FUNCTION_BLOCK ManualMode EXTENDS CyclicComponent
+VAR
+	IStateMachine : I_StateController;
+	Unused : State;
+	_Aborting : I_State := Unused;
+	_Aborted : I_State:= Unused;
+	_Clearing : I_State:= Unused;
+	_Stopping : I_State:= Unused;
+	_Stopped : I_State:= Unused;
+	_Resetting : I_State:= Unused;
+	_Idle : I_State:= Unused;
+	_Starting : I_State:= Unused;
+	_Execute : I_State:= Unused;
+	_Suspending : I_State:= Unused;
+	_Suspended : I_State:= Unused;
+	_Unsuspending : I_State:= Unused;
+	_Holding : I_State:= Unused;
+	_Held : I_State:= Unused;
+	_Unholding : I_State:= Unused;
+	_Completing : I_State:= Unused;
+	_Completed : I_State:= Unused;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (780)
+CASE IStateMachine.PMLState OF
+//	E_PMLState.Undefined:
+	E_PMLState.Aborting :
+		IF _Aborting.Executing() THEN
+			IStateMachine.StateComplete();
+		END_IF
+	E_PMLState.Aborted :
+		_Aborted.Executing();
+	E_PMLState.Clearing :
+		IF _Clearing.Executing() THEN
+			IStateMachine.StateComplete();
+		END_IF
+	E_PMLState.Stopping:
+		IF _Stopping.Executing() THEN
+			IStateMachine.StateComplete();
+		END_IF
+	E_PMLState.Stopped:
+		_Stopped.Executing();
+	E_PMLState.Resetting:
+		IF _Resetting.Executing() THEN
+			IStateMachine.StateComplete();
+		END_IF
+	E_PMLState.Idle:
+		_Idle.Executing();
+	E_PMLState.Starting:
+		IF _Starting.Executing() THEN
+			IStateMachine.StateComplete();
+		END_IF
+	E_PMLState.Execute:
+		IF _Execute.Executing() THEN
+			IStateMachine.StateComplete();
+		END_IF
+END_CASE
+
+
+
+### __shared_data_storage_string_table__.auxiliary (647)
+FUNCTION_BLOCK ProductionMode EXTENDS CyclicComponent
+VAR
+	IStateMachine : I_StateController;
+	Unused : State;
+	_Aborting : I_State := Unused;
+	_Aborted : I_State:= Unused;
+	_Clearing : I_State:= Unused;
+	_Stopping : I_State:= Unused;
+	_Stopped : I_State:= Unused;
+	_Resetting : I_State:= Unused;
+	_Idle : I_State:= Unused;
+	_Starting : I_State:= Unused;
+	_Execute : I_State:= Unused;
+	_Suspending : I_State:= Unused;
+	_Suspended : I_State:= Unused;
+	_Unsuspending : I_State:= Unused;
+	_Holding : I_State:= Unused;
+	_Held : I_State:= Unused;
+	_Unholding : I_State:= Unused;
+	_Completing : I_State:= Unused;
+	_Completed : I_State:= Unused;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (1418)
+CASE IStateMachine.PMLState OF
+//	E_PMLState.Undefined:
+	E_PMLState.Aborting :
+		IF _Aborting.Executing() THEN
+			IStateMachine.StateComplete();
+		END_IF
+	E_PMLState.Aborted :
+		_Aborted.Executing();
+	E_PMLState.Clearing :
+		IF _Clearing.Executing() THEN
+			IStateMachine.StateComplete();
+		END_IF
+	E_PMLState.Stopping:
+		IF _Stopping.Executing() THEN
+			IStateMachine.StateComplete();
+		END_IF
+	E_PMLState.Stopped:
+		_Stopped.Executing();
+	E_PMLState.Resetting:
+		IF _Resetting.Executing() THEN
+			IStateMachine.StateComplete();
+		END_IF
+	E_PMLState.Idle:
+		_Idle.Executing();
+	E_PMLState.Starting:
+		IF _Starting.Executing() THEN
+			IStateMachine.StateComplete();
+		END_IF
+	E_PMLState.Execute:
+		IF _Execute.Executing() THEN
+			IStateMachine.StateComplete();
+		END_IF
+	E_PMLState.Holding:
+		IF _Holding.Executing() THEN
+			IStateMachine.StateComplete();
+		END_IF
+	E_PMLState.Held:
+		_Held.Executing();
+	E_PMLState.Unholding:
+		IF _Unholding.Executing() THEN
+			IStateMachine.StateComplete();
+		END_IF
+	E_PMLState.Suspending:
+		IF _Suspending.Executing() THEN
+			IStateMachine.StateComplete();
+		END_IF
+	E_PMLState.Suspended:
+		_Suspended.Executing();
+	E_PMLState.Unsuspending:
+		IF _Unsuspending.Executing() THEN
+			IStateMachine.StateComplete();
+		END_IF
+	E_PMLState.Completing:
+		IF _Completing.Executing() THEN
+			IStateMachine.StateComplete();
+		END_IF
+	E_PMLState.Completed:
+		_Completed.Executing();
+END_CASE
+
+
+
+### __shared_data_storage_string_table__.auxiliary (53)
+4FUNCTION_BLOCK State IMPLEMENTS I_State
+VAR
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (24)
+METHOD Executing : BOOL
+
+
+### __shared_data_storage_string_table__.auxiliary (228)
+// This function has been automatically generated from the project information.
+{attribute 'signature_flag' := '1073741824'}
+{attribute 'TcGenerated'}
+{attribute 'no-analysis'}
+FUNCTION F_GetCompany : WSTRING
+VAR_INPUT
+	
+END_VAR
+
+### __shared_data_storage_string_table__.auxiliary (226)
+// This function has been automatically generated from the project information.
+{attribute 'signature_flag' := '1073741824'}
+{attribute 'TcGenerated'}
+{attribute 'no-analysis'}
+FUNCTION F_GetTitle : WSTRING
+VAR_INPUT
+	
+END_VAR
+
+### __shared_data_storage_string_table__.auxiliary (234)
+// This function has been automatically generated from the project information.
+{attribute 'signature_flag' := '1073741824'}
+{attribute 'TcGenerated'}
+{attribute 'no-analysis'}
+FUNCTION F_GetVersion : ST_LibVersion
+VAR_INPUT
+	
+END_VAR
+
+### __shared_data_storage_string_table__.auxiliary (65)
+@TYPE CoOrd_Int :
+STRUCT
+	X : INT;
+	Y : INT;
+END_STRUCT
+END_TYPE
+
+
+### __shared_data_storage_string_table__.auxiliary (68)
+CTYPE CoOrd_Real :
+STRUCT
+	X : REAL;
+	Y : REAL;
+END_STRUCT
+END_TYPE
+
+
+### __shared_data_storage_string_table__.auxiliary (150)
+{attribute 'qualified_only'}
+{attribute 'strict'}
+{attribute 'to_string'}
+TYPE InspectionTypes :
+(
+	WaferDetection := 0,
+	WaferMould := 1
+);
+END_TYPE
+
+
+### __shared_data_storage_string_table__.auxiliary (100)
+cTYPE CameraSettingsRecipe :
+STRUCT
+	ExposureTime : UDINT;
+	RulerLines : UDINT;
+END_STRUCT
+END_TYPE
+
+
+### __shared_data_storage_string_table__.auxiliary (223)
+TYPE PixelCalibration :
+STRUCT
+	X_mm : LREAL;
+	Y_mm : LREAL;
+	Z_mm : LREAL;
+	MaxMouldHeight : LREAL;
+	MinMouldHeight : LREAL;
+	CrossMachineRef : LREAL;
+	SickRulerOffset : LREAL;
+	SickRulerScale : LREAL;
+END_STRUCT
+END_TYPE
+
+
+### __shared_data_storage_string_table__.auxiliary (301)
+TYPE BarCavityRecipe :
+STRUCT
+	CavityType : T_MaxString;
+	LevelReference1 : LevelReference;
+	LevelReference2 : LevelReference;
+	MaxDifferenceBetweenLevels : LREAL;
+	CavityWidth : UDINT;
+	CavityLength : UDINT;
+	EmptyCavityDepth : UDINT;
+	CavitesOffsets : ARRAY[0..9] OF CoOrd_Real;
+END_STRUCT
+END_TYPE
+
+
+### __shared_data_storage_string_table__.auxiliary (92)
+[TYPE LevelReference :
+STRUCT
+	Offset : CoOrd_Real;
+	Size : CoOrd_Real;
+END_STRUCT
+END_TYPE
+
+
+### __shared_data_storage_string_table__.auxiliary (268)
+TYPE WaferInspection :
+STRUCT
+	LoadPath : T_MaxString;
+	SKU : SkuBarCavityRecipe;
+	Cavities : BarCavityRecipe;
+	Wafer : WaferInspectionRecipe;
+	Camera : CameraSettingsRecipe;
+	Pixels : PixelCalibration;
+	VisionProcess : WaferDetectionVisionRecipe;
+END_STRUCT
+END_TYPE
+
+
+### __shared_data_storage_string_table__.auxiliary (435)
+TYPE EdgeSettings :
+STRUCT
+	aStartPoint          : TcVnPoint2_REAL;
+    aEndPoint            : TcVnPoint2_REAL;
+    eEdgeDirection       : ETcVnEdgeDirection;
+    fMinStrength         : REAL;
+    nSearchLines         : UDINT;
+    fSearchLineDist      : REAL;
+    nMaxThickness        : UDINT;
+    nSubpixelsIterations : UDINT;
+    fApproxPrecision     : REAL;
+    eAlgorithm           : ETcVnEdgeDetectionAlgorithm;
+END_STRUCT
+END_TYPE
+
+### __shared_data_storage_string_table__.auxiliary (147)
+{attribute 'qualified_only'}
+{attribute 'strict'}
+{attribute 'to_string'}
+TYPE NestleProducts :
+(
+	KitKatChunky := 0,
+	KitKat2Bar := 1
+);
+END_TYPE
+
+
+### __shared_data_storage_string_table__.auxiliary (376)
+TYPE SkuBarCavityRecipe :
+STRUCT
+	MouldType : T_MaxString;
+	MouldWidth_CD : UDINT;
+	MouldLength_MD : UDINT;
+	ProductType : NestleProducts;
+	CavityType : NestleProducts;
+	NumberBarsPerRow : UINT;
+	NumberOfBars : UINT;
+	WafersPerBar : UINT;
+	BarLocations : ARRAY[0..99] OF CoOrd_Real;
+	SkuLeftEdgeSettings : EdgeSettings;
+	SkuTopEdgeSettings : EdgeSettings;
+END_STRUCT
+END_TYPE
+
+
+### __shared_data_storage_string_table__.auxiliary (143)
+//From Rockwell
+TYPE SystemControl :
+STRUCT
+	Run : BOOL;
+	Stop : BOOL;
+	Reset : BOOL;
+	Shutdown : BOOL;
+	HeartBeat : BOOL;
+END_STRUCT
+END_TYPE
+
+
+### __shared_data_storage_string_table__.auxiliary (338)
+//To Rockwell
+TYPE SystemStatus :
+STRUCT
+	CurrentSKUName : STRING(20);
+	CurrentSKUID : UINT;
+	TotalWafers : USINT;
+	TotalBars : USINT;
+	TotalRows : USINT;
+	InspectionCount : UDINT;
+	SystemReady : BOOL;
+	SystemRunning : BOOL;
+	SystemWarning : BOOL;
+	SystemFault : BOOL;
+	PowerFailureShutdown : BOOL;
+	HeartBeat : BOOL;
+END_STRUCT
+END_TYPE
+
+
+### __shared_data_storage_string_table__.auxiliary (143)
+TYPE WaferDetectionVisionRecipe :
+STRUCT
+	MedianFilterSize : UDINT;
+	OcclusionMaxLimit : UINT;
+	ReflectionMaxLimit : UINT;
+END_STRUCT
+END_TYPE
+
+
+### __shared_data_storage_string_table__.auxiliary (931)
+TYPE WaferInspectionRecipe :
+STRUCT
+	Name : T_MaxString;
+	InspectionType : InspectionTypes;
+	MaxWaferHeightFromBase : UDINT;
+	MinWaferHeightFromBase : UDINT;
+	PassingWaferCavityPercentage : UDINT;
+	PluggedCavityPercentage : UDINT;
+	MaxNumberFailedWafersAllowed : UINT;
+	HeightFromMouldBase : UINT;
+	WaferStatsImageWidth : UINT;
+	WaferStatsImageHeight : UINT;
+	WaferIdealWidth : UINT;
+	WaferIdealHeight : UINT;
+	WaferLaminationHeight : REAL;
+	PlugDistanceFromMouldToSurface : UINT;
+	MaxWaferWidthLimit : INT;
+	MinWaferWidthLimit : INT;
+	MaxWaferLengthLimit : INT;
+	MinWaferLengthLimit : INT;
+	MaxWaferAngleLimit : INT;
+	MinWaferAngleLimit : INT;
+	MaxWaferSDHeightLimit : INT;
+	MinWaferSDHeightLimit : INT;
+	MaxWaferMeanHeightLimit : INT;
+	MinWaferMeanHeightLimit : INT;
+	LaminateInspectionLayerNumber : SINT;
+	LaminateStartLayer : UINT;
+	LaminateStopLayer : UINT;
+	MaxLaminateSum : UINT;
+	MinLaminateSum : UINT;
+END_STRUCT
+END_TYPE
+
+
+### __shared_data_storage_string_table__.auxiliary (48)
+/METHOD ManualShutdown : BOOL
+VAR_INPUT
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (41)
+(METHOD ManualWritePersistantData : BOOL
+
+
+### __shared_data_storage_string_table__.auxiliary (658)
+FUNCTION_BLOCK PersistantDataAndUpsHandling EXTENDS CyclicComponent IMPLEMENTS I_PersistenDataandUPS
+VAR
+	getCU8130_0240Status: FB_GetUPSStatus;
+	localAmsNetID: T_AmsNetID := '';
+	batteryPortInWindows: T_AmsPort := 0;
+	readUpsEvery4Seconds: BOOL := TRUE;
+	_CU8130_0240Status: ST_UPSStatus;
+	_PowerFailure: BOOL;
+	persistentData: FB_WritePersistentData;
+	plcPortNumber: T_AmsPort := 851;
+	startWrite: BOOL;
+	manualWriteTrigger: BOOL;
+	manualShutDownTrigger : BOOL;
+	_WriteBusy: BOOL;
+	WriteInProgress: BOOL;
+	_WriteComplete: BOOL;
+	triggerWrite: R_TRIG;
+	_LastError: HRESULT;
+	windowsShutdown: NT_Shutdown;
+	startShutdown: BOOL;
+	_ShutdownBusy: BOOL;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (127)
+manualWriteTrigger := ManualWritePersistantData := TRUE;
+
+IF manualWriteTrigger THEN
+	ManualWritePersistantData := TRUE;
+END_IF
+
+### __shared_data_storage_string_table__.auxiliary (1479)
+getCU8130_0240Status(
+	sNetId:= localAmsNetID, 
+	nPort:= batteryPortInWindows, 
+	bEnable:= readUpsEvery4Seconds, 
+	bValid=> , 
+	bError=> , 
+	nErrId=> , 
+	stStatus=> _CU8130_0240Status);
+	
+IF getCU8130_0240Status.bError THEN
+	_LastError := TO_DINT(getCU8130_0240Status.nErrId);
+END_IF
+
+IF NOT getCU8130_0240Status.bValid THEN
+	RETURN;
+END_IF
+
+_PowerFailure := (_CU8130_0240Status.ePowerStatus = E_UpsPowerStatus.PowerOnBattery);
+
+triggerWrite(CLK:= _PowerFailure OR manualWriteTrigger);
+
+IF triggerWrite.Q THEN
+	startWrite := TRUE;
+	manualWriteTrigger := FALSE;
+	_WriteComplete := FALSE;
+END_IF
+
+IF startWrite THEN
+	WriteInProgress := TRUE;
+END_IF
+	
+persistentData(
+	NETID:= localAmsNetID, 
+	PORT:= plcPortNumber, 
+	START:= startWrite, 
+	TMOUT:= , 
+	MODE:= SPDM_2PASS,
+	BUSY=> , 
+	ERR=> , 
+	ERRID=> );	
+	
+startWrite := FALSE;
+_WriteBusy := persistentData.BUSY;
+
+IF persistentData.ERR THEN
+	WriteInProgress := FALSE;
+	_LastError := TO_DINT(persistentData.ERRID);
+ELSIF WriteInProgress AND NOT persistentData.BUSY THEN
+	WriteInProgress := FALSE;
+	_WriteComplete := TRUE;
+END_IF
+
+IF (_WriteComplete AND _PowerFailure) OR manualShutDownTrigger THEN
+	startShutdown := TRUE;
+ELSE
+	_WriteComplete := FALSE;
+END_IF
+
+windowsShutdown(
+	NETID:= localAmsNetID, 
+	DELAY:= , 
+	START:= startShutdown, 
+	TMOUT:= , 
+	BUSY=> , 
+	ERR=> , 
+	ERRID=> );
+	
+_ShutdownBusy := windowsShutdown.BUSY;
+
+IF windowsShutdown.ERR THEN
+	startShutdown := FALSE;
+	_LastError := TO_DINT(windowsShutdown.ERRID);
+END_IF
+
+### __shared_data_storage_string_table__.auxiliary (374)
+{attribute 'TcGenerated'}
+{attribute 'no-analysis'}
+{attribute 'linkalways'}
+// This function has been automatically generated from the project information.
+VAR_GLOBAL CONSTANT
+	{attribute 'const_non_replaced'}
+	stLibVersion_Nestle_Vanguard_Base_Library : ST_LibVersion := (iMajor := 0, iMinor := 0, iBuild := 0, iRevision := 6, nFlags := 0, sVersion := '0.0.0.6');
+END_VAR

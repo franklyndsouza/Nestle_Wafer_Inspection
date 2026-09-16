@@ -1,0 +1,75 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="MAIN" Id="{bf7af96c-5399-4a6a-aafd-5b7bb5263182}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	ChannelControl : VisionChannelControl(Name := 'Beckhoff Camera Control',VisionChannel := GVL_Vision.ImageChannel);
+	WaferDetectRecipe : WaferDetectionVisionRecipe;
+	SystemCtrl : SystemControl;
+	StartupState : INT;
+	SystemReady : BOOL;
+	ShutdownState : INT;
+	OperatingState : INT;
+	SKUDetected : BOOL;
+	startTrig : R_TRIG;
+	stopTrig : R_TRIG;
+	skuTrigger : R_TRIG;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[ChannelControl.CyclicLogic();
+
+startTrig(CLK := SystemCtrl.StartUpRequest);
+CASE StartupState OF
+	0: //Unknown conditions
+		IF SUCCEEDED(GVL_Vision.LabelProcess.LoadRecipe(WaferDetectRecipe)) THEN
+			SystemReady := TRUE;
+			StartupState := 1;
+		END_IF
+	1:
+		IF startTrig.Q AND SystemReady THEN
+			StartupState := 2;
+		END_IF
+	2:
+		IF ChannelControl.StartVision() THEN
+			StartupState := 1;
+		END_IF
+END_CASE
+
+skuTrigger(CLK := SKUDetected);
+CASE OperatingState OF 
+	0:
+		IF skuTrigger.Q THEN
+			ChannelControl.TriggerImage();
+			OperatingState := 1;
+		END_IF
+	1:
+		IF NOT ChannelControl.ImageProcessingComplete THEN
+			OperatingState := 2;
+		END_IF
+	2:
+		IF ChannelControl.ImageProcessingComplete THEN
+			IF ChannelControl.ImageProcessingCompletedSuccessfully THEN
+				OperatingState := 0;
+			ELSE
+				OperatingState := 3;
+			END_IF
+		END_IF
+		
+		
+END_CASE
+
+stopTrig(CLK := SystemCtrl.ShutdownRequest);
+CASE ShutdownState OF		
+	0: //unkown conditions
+		IF stopTrig.Q THEN
+			ShutdownState := 1;
+		END_IF
+	1:
+		IF ChannelControl.StopVision() THEN
+			ShutdownState := 2;
+		END_IF
+END_CASE]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

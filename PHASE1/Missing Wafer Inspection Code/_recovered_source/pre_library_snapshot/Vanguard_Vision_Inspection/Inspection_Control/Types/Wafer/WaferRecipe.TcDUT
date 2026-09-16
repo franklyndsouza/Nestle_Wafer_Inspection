@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <DUT Name="WaferRecipe" Id="{1bb3a427-2311-4152-b1ad-99d63dfaf4f2}">
+    <Declaration><![CDATA[TYPE WaferRecipe :
+STRUCT
+	Name : T_MaxString;
+	InspectionType : InspectionTypes;
+	MaxWaferHeightFromBase : UDINT;
+	MinWaferHeightFromBase : UDINT;
+	PassingWaferCavityPercentage : UDINT;
+	MaxNumberFailedBarsAllowed : UINT;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

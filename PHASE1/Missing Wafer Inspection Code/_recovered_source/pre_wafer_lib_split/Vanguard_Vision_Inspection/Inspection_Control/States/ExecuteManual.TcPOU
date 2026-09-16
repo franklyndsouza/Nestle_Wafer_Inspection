@@ -1,0 +1,68 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="ExecuteManual" Id="{532a6e25-2d18-498d-b6ba-e63eba45ba25}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK ExecuteManual EXTENDS Vanguard_WaferDetection.State
+VAR
+	_stateMachine : I_ExecuteTranisitons;
+	ChannelControl : I_VisionChannelControl;
+	OperatingState : INT;
+	DummySKUDetectedSignal : BOOL;
+	startTrig : R_TRIG;
+	stopTrig : R_TRIG;
+	skuTrigger : R_TRIG;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="Executing" Id="{d30b50e2-6397-41cc-aca9-1c7af7d8bf62}">
+      <Declaration><![CDATA[METHOD Executing : BOOL
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[skuTrigger(CLK := DummySKUDetectedSignal);
+CASE OperatingState OF 
+	0:
+		IF skuTrigger.Q THEN
+			ChannelControl.TriggerImage();
+			OperatingState := 1;
+		END_IF
+	1:
+		IF ChannelControl.ImageProcessing THEN
+			OperatingState := 2;
+		END_IF
+	2:
+		IF ChannelControl.ImageProcessingCompletedSuccessfully THEN
+			OperatingState := 0;
+		ELSE
+			OperatingState := 99;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="FB_Init" Id="{a811cb79-0054-4aea-8c66-80334a792822}">
+      <Declaration><![CDATA[//FB_Init is always available implicitly and it is used primarily for initialization.
+//The return value is not evaluated. For a specific influence, you can also declare the
+//methods explicitly and provide additional code there with the standard initialization
+//code. You can evaluate the return value.
+METHOD FB_Init: BOOL
+VAR_INPUT
+    bInitRetains: BOOL; // TRUE: the retain variables are initialized (reset warm / reset cold)
+    bInCopyCode: BOOL;  // TRUE: the instance will be copied to the copy code afterward (online change)   
+	StateMachine : I_ExecuteTranisitons;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_stateMachine := StateMachine;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetDependencies" Id="{d669ca64-0d81-4293-83f8-fc69f95a029d}">
+      <Declaration><![CDATA[METHOD SetDependencies : BOOL
+VAR_INPUT
+	Control : I_VisionChannelControl;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[ChannelControl := Control;]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

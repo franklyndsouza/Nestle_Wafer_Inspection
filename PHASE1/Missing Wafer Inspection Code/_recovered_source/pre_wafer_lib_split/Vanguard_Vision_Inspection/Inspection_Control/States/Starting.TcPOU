@@ -1,0 +1,46 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="Starting" Id="{a6366843-b758-4595-9d46-48cc57b0118e}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK Starting EXTENDS Vanguard_WaferDetection.State
+VAR
+	StartupState : INT;
+	ChannelControl : I_VisionChannelControl;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="Executing" Id="{f346418a-a3d9-4176-a409-28486b55d633}">
+      <Declaration><![CDATA[METHOD Executing : BOOL
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE StartupState OF
+// 	0: //Unknown conditions
+// 		IF SUCCEEDED(GVL_Vision.LabelProcess.LoadRecipe(WaferDetectRecipe)) THEN
+// 			SystemReady := TRUE;
+// 			StartupState := 1;
+// 		END_IF
+
+	0:
+		IF ChannelControl.StartVision() THEN
+			StartupState := 1;
+		END_IF
+	1:
+		StartupState := 0;
+		Executing := TRUE;
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetDependencies" Id="{eb43ab81-e9c2-4ceb-a702-e9f0d9133a11}">
+      <Declaration><![CDATA[METHOD SetDependencies : BOOL
+VAR_INPUT
+	Control : I_VisionChannelControl;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[ChannelControl := Control;
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

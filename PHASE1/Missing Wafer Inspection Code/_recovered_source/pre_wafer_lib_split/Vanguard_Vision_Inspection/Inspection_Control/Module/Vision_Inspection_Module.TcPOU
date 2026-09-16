@@ -1,0 +1,59 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="Vision_Inspection_Module" Id="{64b922d4-6def-4a82-9faf-77232b769ac0}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK Vision_Inspection_Module EXTENDS Module
+VAR
+	PackMLModeController : ModeController(StateController := PackMLStateMachine, 
+											Production := Production, 
+											Manual := Manual, 
+											Maintainence := Maintainence);
+	PackMLStateMachine : StateController(ModeController := PackMLModeController);
+	HMI : Vision_Inspection_HMI('Vision Inspection',PackMLStateMachine,PackMLModeController);
+	
+	// states 
+	ProductionExecute : ExecuteProduction(PackMLStateMachine);
+	ProductionStarting : Starting;
+	ProductionStopping : Stopping;
+	ManualExecute : ExecuteManual(PackMLStateMachine);
+	ManualStarting : Starting;
+	ManualStopping : Stopping;
+	
+	Production : ProductionMode(Name := 'Mounting Production', StateMachine := PackMLStateMachine) := (Execute := ProductionExecute,
+																										Starting := ProductionStarting,
+																										Stopping := ProductionStopping);
+	Manual : ManualMode(Name := 'Mounting Manual', StateMachine := PackMLStateMachine) := (Execute := ManualExecute,
+																										Starting := ManualStarting,
+																										Stopping := ManualStopping);
+	Maintainence : MaintainenceMode(Name := 'Mounting Maintainence', StateMachine := PackMLStateMachine);
+	
+	ChannelControl : VisionChannelControl(Name := 'Beckhoff Camera Control',VisionChannel := GVL_Vision.ImageChannel);
+	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="Initializing" Id="{817fb70e-7401-4314-96f9-0f291f2e0e73}">
+      <Declaration><![CDATA[(* This Module will be done initialize when ModuleInitialized := TRUE;, subequently all subitems will be called to be initialized *)
+METHOD Initializing
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CyclicRunner.AddCallee(PackMLModeController);
+CyclicRunner.AddCallee(PackMLStateMachine);
+CyclicRunner.AddCallee(HMI);
+CyclicRunner.AddCallee(ChannelControl);
+
+ProductionExecute.SetDependencies(Control := ChannelControl);
+ProductionStarting.SetDependencies(Control := ChannelControl);
+ProductionStopping.SetDependencies(Control := ChannelControl);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="OnCyclicCall" Id="{00d5aabe-6792-442f-b757-9b7b0b94959e}">
+      <Declaration><![CDATA[METHOD OnCyclicCall
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="MAIN" Id="{bf7af96c-5399-4a6a-aafd-5b7bb5263182}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	WaferVisionModule : Vision_Inspection_Module(Name := 'Wafer Detection Module');
+	Init : BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF NOT Init THEN
+	Init := TRUE;
+	WaferVisionModule.Initialize();
+	GVL_Vision.waferInspectionRecipe.VisionProcess.MedianFilterSize := 5;
+	GVL_Vision.WaferDetectionProcess.LoadRecipe(Recipe := GVL_Vision.waferInspectionRecipe);
+	RETURN;
+END_IF
+
+WaferVisionModule.CyclicLogic();]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

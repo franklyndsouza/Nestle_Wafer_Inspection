@@ -1,0 +1,72 @@
+<?xml version="1.0"?>
+<TcSmItem xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4026.20" ClassName="CTComPlcObjDef">
+	<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" XtvPath="Inspection_Control\Inspection_Control Instance.xtv" TmcPath="Inspection_Control\Inspection_Control.tmc">
+		<Name>__FILENAME__</Name>
+		<CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>
+		<Contexts>
+			<Context>
+				<Id>0</Id>
+				<Name>VisionTask</Name>
+				<ManualConfig>
+					<OTCID>#x02010040</OTCID>
+				</ManualConfig>
+				<Priority>1</Priority>
+				<CycleTime>10000000</CycleTime>
+			</Context>
+			<Context>
+				<Id>1</Id>
+				<Name>PlcTask</Name>
+				<ManualConfig>
+					<OTCID>#x02010030</OTCID>
+				</ManualConfig>
+				<Priority>20</Priority>
+				<CycleTime>10000000</CycleTime>
+			</Context>
+		</Contexts>
+		<InitSymbols>
+			<InitSymbol>
+				<Name>GVL_Vision.ImageChannel._ReadParameter.ReadCamera.oidITcVnGevImageProvider</Name>
+				<Type GUID="{18071995-0000-0000-0000-00000000000F}">OTCID</Type>
+				<Comment><![CDATA[ Internal reference to the corresponding TcVnGevImageProvider TcCOM module ID, which needs to be set via TC init symbol. ]]></Comment>
+				<AreaNo>#x00000003</AreaNo>
+				<Data>00000000</Data>
+				<Properties>
+					<Property>
+						<Name>TcCategoryOID</Name>
+						<Value>TcVnGevImageProvider</Value>
+					</Property>
+				</Properties>
+			</InitSymbol>
+			<InitSymbol>
+				<Name>GVL_Vision.ImageChannel._WriteParameter.WriteCamera.oidITcVnGevImageProvider</Name>
+				<Type GUID="{18071995-0000-0000-0000-00000000000F}">OTCID</Type>
+				<Comment><![CDATA[ Internal reference to the corresponding TcVnGevImageProvider TcCOM module ID, which needs to be set via TC init symbol. ]]></Comment>
+				<AreaNo>#x00000003</AreaNo>
+				<Data>00000000</Data>
+				<Properties>
+					<Property>
+						<Name>TcCategoryOID</Name>
+						<Value>TcVnGevImageProvider</Value>
+					</Property>
+				</Properties>
+			</InitSymbol>
+			<InitSymbol>
+				<Name>GVL_Vision.Camera.Camera.oidITcVnImageProvider</Name>
+				<Type GUID="{18071995-0000-0000-0000-00000000000F}">OTCID</Type>
+				<Comment><![CDATA[ Internal reference to the corresponding TcVnImageProvider TcCOM module ID, which needs to be set via TC init symbol. ]]></Comment>
+				<AreaNo>#x00000013</AreaNo>
+				<Data>30000101</Data>
+				<Properties>
+					<Property>
+						<Name>TcCategoryOID</Name>
+						<Value>TcVnImageProvider</Value>
+					</Property>
+				</Properties>
+			</InitSymbol>
+		</InitSymbols>
+		<TaskPouOids>
+			<TaskPouOid Prio="1" OTCID="#x08502001"/>
+			<TaskPouOid Prio="20" OTCID="#x08502002"/>
+		</TaskPouOids>
+	</Instance>
+</TcSmItem>

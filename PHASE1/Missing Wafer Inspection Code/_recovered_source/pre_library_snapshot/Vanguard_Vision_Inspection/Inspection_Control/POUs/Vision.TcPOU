@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="Vision" Id="{df83cc56-7fa0-4916-abb7-796a92b5abde}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM Vision
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[GVL_Vision.ImageChannel.CyclicLogic();]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

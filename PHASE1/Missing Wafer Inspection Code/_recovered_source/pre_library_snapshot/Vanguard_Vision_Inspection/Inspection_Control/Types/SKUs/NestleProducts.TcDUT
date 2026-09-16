@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <DUT Name="NestleProducts" Id="{731ad174-849a-4b08-8397-325c1fd50b44}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'strict'}
+{attribute 'to_string'}
+TYPE NestleProducts :
+(
+	KitKatChunky := 0,
+	KitKat2Bar := 1
+);
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

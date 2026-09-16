@@ -1,0 +1,11 @@
+.vs/
+*.suo
+*.user
+*.Zone.Identifier
+**/CopilotIndices/
+**/FileContentIndex/
+*.vsidx
+Thumbs.db
+.DS_Store
+__pycache__/
+*.pyc

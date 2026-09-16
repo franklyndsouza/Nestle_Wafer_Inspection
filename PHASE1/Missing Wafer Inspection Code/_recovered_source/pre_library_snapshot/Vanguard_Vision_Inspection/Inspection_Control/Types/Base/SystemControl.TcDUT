@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <DUT Name="SystemControl" Id="{0f073b3a-007f-4a3f-97c8-6376fc135e34}">
+    <Declaration><![CDATA[TYPE SystemControl :
+STRUCT
+	StartUpRequest : BOOL;
+	ShutdownRequest : BOOL;
+	Reset : BOOL;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

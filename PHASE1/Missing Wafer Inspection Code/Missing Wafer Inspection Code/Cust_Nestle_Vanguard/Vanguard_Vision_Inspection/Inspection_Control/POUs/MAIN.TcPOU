@@ -1,0 +1,51 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="MAIN" Id="{bf7af96c-5399-4a6a-aafd-5b7bb5263182}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	// Ethernet IP inputs
+	EIP_System_Ctrl : SystemControl;
+	EIP_System_Ctrl_Byte AT%I* : BYTE;
+	DecodeEthernetIPComms : DecodeRockwellData(Name := 'Data Decoder', SysCtrl := EIP_System_Ctrl, SysCtrlByte := EIP_System_Ctrl_Byte);
+	
+	// EthernetIP outputs
+	EIP_System_Status : SystemStatus;
+	EIP_System_Status_Bytes AT%Q* : ARRAY[0..29] OF BYTE;
+	//EIP_Wafer_Results : ARRAY[0..143] OF WaferResultStruct;
+	EIP_Wafer_Results_Bytes AT%Q* : ARRAY[0..719] OF BYTE;
+	EncodeEthernetIPComms : EncodeBeckhoffData(Name := 'Data Encoder',
+												SysSts := EIP_System_Status,
+												SysStsBytes := EIP_System_Status_Bytes,
+												SysWaferResultsBytes := EIP_Wafer_Results_Bytes,
+												WaferResults := GVL_Vision.WaferProcessResults);
+						
+	//wafer detection module
+	WaferVisionModule : Wafer_Inspection_Module(Name := 'Wafer Detection Module', 
+												VisionChannel := GVL_Vision.ImageChannel, 
+												Process := GVL_Vision.WaferDetectionProcess,
+												IO_Ctrl := EIP_System_Ctrl,
+												IO_Status := EIP_System_Status,
+												WaferResultArray := GVL_Vision.WaferProcessResults);
+	HMI : Wafer_Module_HMI('Vision Inspection',0,0);
+	Init : BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//initialise system
+//run wafer module initialisation to set up internal states
+//assign module to its HJMI
+IF NOT Init THEN
+	Init := TRUE;
+	WaferVisionModule.Initialize();
+	HMI.SetModule(WaferVisionModule);
+	RETURN;
+END_IF
+
+//Cyclic calls to the required objects
+DecodeEthernetIPComms.CyclicLogic();
+WaferVisionModule.CyclicLogic();
+HMI.CyclicLogic();
+EncodeEthernetIPComms.CyclicLogic();]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

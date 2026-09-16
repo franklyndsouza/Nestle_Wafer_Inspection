@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <DUT Name="SKURecipe" Id="{8655123f-bd70-4a3b-b0a7-1b39a985f3ad}">
+    <Declaration><![CDATA[TYPE SKURecipe :
+STRUCT
+	MouldType : T_MaxString;
+	MouldWidth : UDINT;
+	MouldLength : UDINT;
+	ProductType : NestleProducts;
+	NumberBarsPerRow : UINT;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

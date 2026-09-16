@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <GVL Name="GVL_Vision" Id="{fb719938-f404-4796-9ddd-b170432ceb2f}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+VAR_GLOBAL
+	//Vision Declarations
+	Camera : SimpleCamera; //Camera connection for TwinCAT vision
+	WaferProcessResults : ARRAY[0..199] OF WaferResultStruct; //Results array passed by reference into the vision process
+	WaferDetectionProcess : ProcessSKU(WaferResultArray := WaferProcessResults); //vision process to analyse images recieved
+	ADSImageSource : ImageADSArrayReciever<5242880> := (Height := 2912, Width := 500, ChannelNumber := 1, ElementType := ETcVnElementType.TCVN_ET_UINT);
+	ImageChannel : VisionChannel(Name := 'Beckhoff Camera', ImageSource := Camera, ImageProcess := WaferDetectionProcess) := (ADSImageOption := AdsImageSource); //vision channel to run the vision state machine
+END_VAR]]></Declaration>
+  </GVL>
+</TcPlcObject>

@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <DUT Name="WaferInspection" Id="{22b68b08-2649-43f3-9892-88bd54dffb13}">
+    <Declaration><![CDATA[TYPE WaferInspection :
+STRUCT
+	SKU : SKURecipe;
+	Cavities : CavityRecipe;
+	Wafer : WaferRecipe;
+	Camera : CameraRecipe;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

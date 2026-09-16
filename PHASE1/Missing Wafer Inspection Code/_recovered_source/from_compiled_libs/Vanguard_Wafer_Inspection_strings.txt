@@ -1,0 +1,2221 @@
+### __shared_data_storage_string_table__.auxiliary (35898)
+TotalTiming(START := FALSE, RESET := FALSE);
+TotalTiming(START := TRUE,RESET := FALSE);
+
+Image.GetImageInfo(ProcessSKUDiagResult.ImageInfo);
+//Generate initial display image for testing
+hrPrev := F_VN_CopyIntoDisplayableImage(Image, OriginalImage, hrPrev);
+
+//Takes in the raw 16bit height map data form camera source
+//calibrates image using the Ruler Scaling and the Pixels/mm value form the recipe
+{region "Conversion of the raw 16bit image to calibrated image for processing"}
+
+ScaleTiming(START := FALSE,RESET := FALSE);
+ScaleTiming(START := TRUE, RESET := FALSE);
+hrPrev := F_VN_MultiplyImageWithScalar(Visionrecipe.Pixels.SickRulerScale/VisionRecipe.Pixels.Z_mm, Image, Image, hrPrev);
+hrPrev := F_VN_AddScalarToImage(VisionRecipe.Pixels.SickRulerOffset/VisionRecipe.Pixels.Z_mm, Image, Image, hrPrev);
+ScaleTiming(START := FALSE, RESET := FALSE);
+ScaleTiming(START := FALSE, RESET := TRUE);	
+{endregion}
+
+//Takes the calibrated image
+//applies a median filter to remove noise, filter size max is 5 as not usinged values	
+{region "Median Filtering reduces the noise in the image"}
+
+hrPrev := F_VN_MedianFilter(Image, medianFilteredImage, VisionRecipe.VisionProcess.MedianFilterSize, hrPrev);
+
+{endregion}
+
+//Takes the calibrated filtered image
+//enacts 3 pyramid downs to reduce the image size to a usable size whil epreserving values
+//performs an image median operation for 16 bit images
+//checks image median is within known sku height ranges
+//creates boundary min max mould values for later use.
+{region "Derive the Mould Height and Health"}
+medianTiming(START := FALSE,RESET := FALSE);
+medianTiming(START := TRUE, RESET := FALSE);
+hrPrev := F_VN_CopyImage(medianFilteredImage, workingImage, hrPrev);
+hrPrev := F_VN_PyramidDown(workingImage, workingImage, hrPrev);
+hrPrev := F_VN_PyramidDown(workingImage, workingImage, hrPrev);
+hrPrev := F_VN_PyramidDown(workingImage, workingImage, hrPrev);
+ImageMedian_Nestle.Execute(workingImage, hrPrev);
+ProcessSKUDiagResult.ImageMedianValue := ImageMedian_Nestle.Median;
+
+ProcessSKUDiagResult.MouldInRange := ImageMedian_Nestle.Median > VisionRecipe.Pixels.MinMouldHeight/ VisionRecipe.Pixels.Z_mm AND 
+									ImageMedian_Nestle.Median < VisionRecipe.Pixels.MaxMouldHeight/ VisionRecipe.Pixels.Z_mm;
+IF ProcessSKUDiagResult.MouldInRange THEN
+	ProcessSKUDiagResult.MouldMaxLevel := (1.2*TO_REAL(VisionRecipe.Cavities.EmptyCavityDepth)/VisionRecipe.Pixels.Z_mm) + ImageMedian_Nestle.Median;
+	ProcessSKUDiagResult.MouldMinLevel := ImageMedian_Nestle.Median - (1.2*TO_REAL(VisionRecipe.Cavities.EmptyCavityDepth)/VisionRecipe.Pixels.Z_mm);
+ELSE
+	ProcessSKUDiagResult.MouldMaxLevel := VisionRecipe.Pixels.MaxMouldHeight/ VisionRecipe.Pixels.Z_mm;
+	ProcessSKUDiagResult.MouldMinLevel := VisionRecipe.Pixels.MinMouldHeight/ VisionRecipe.Pixels.Z_mm;
+END_IF
+medianTiming(START := FALSE,RESET := FALSE);
+medianTiming(START := FALSE, RESET := TRUE);
+{endregion}
+
+//Takes the calibrated filtered image
+//applies locate edge operations ot left side and top of image, topline and leftline
+//create a flat line across top of image, imageedgeline
+//use topline and leftline intersection point for sku fiducial point
+//use leftline and imageedgeline to find rotation angle in sku
+{region "Find Fiducial point of mould, wafer locations all referenced from this point"}
+fiducialTiming(START := FALSE,RESET := FALSE);
+fiducialTiming(START := TRUE, RESET := FALSE);
+hrPrev := F_VN_CopyImage(medianFilteredImage, workingImage, hrPrev);
+hrPrev := F_VN_LocateEdgeExp(workingImage,
+								ProcessSKUDiagResult.TopEdgePoints,
+								VisionRecipe.SKU.SkuTopEdgeSettings.aStartPoint,
+								VisionRecipe.SKU.SkuTopEdgeSettings.aEndPoint,
+								VisionRecipe.SKU.SkuTopEdgeSettings.eEdgeDirection,
+								VisionRecipe.SKU.SkuTopEdgeSettings.fMinStrength,
+								VisionRecipe.SKU.SkuTopEdgeSettings.nSearchLines,
+								VisionRecipe.SKU.SkuTopEdgeSettings.fSearchLineDist,
+								VisionRecipe.SKU.SkuTopEdgeSettings.nMaxThickness,
+								VisionRecipe.SKU.SkuTopEdgeSettings.nSubpixelsIterations,
+								VisionRecipe.SKU.SkuTopEdgeSettings.fApproxPrecision,
+								VisionRecipe.SKU.SkuTopEdgeSettings.eAlgorithm,
+								hrPrev);
+								
+hrPrev := F_VN_LocateEdgeExp(workingImage,
+								ProcessSKUDiagResult.LeftEdgePoints,
+								VisionRecipe.SKU.SkuLeftEdgeSettings.aStartPoint,
+								VisionRecipe.SKU.SkuLeftEdgeSettings.aEndPoint,
+								VisionRecipe.SKU.SkuLeftEdgeSettings.eEdgeDirection,
+								VisionRecipe.SKU.SkuLeftEdgeSettings.fMinStrength,
+								VisionRecipe.SKU.SkuLeftEdgeSettings.nSearchLines,
+								VisionRecipe.SKU.SkuLeftEdgeSettings.fSearchLineDist,
+								VisionRecipe.SKU.SkuLeftEdgeSettings.nMaxThickness,
+								VisionRecipe.SKU.SkuLeftEdgeSettings.nSubpixelsIterations,
+								VisionRecipe.SKU.SkuLeftEdgeSettings.fApproxPrecision,
+								VisionRecipe.SKU.SkuLeftEdgeSettings.eAlgorithm,
+								hrPrev);
+								
+hrPrev := F_VN_FitLine(ProcessSKUDiagResult.TopEdgePoints, ProcessSKUDiagResult.TopLine, hrPrev);
+hrPrev := F_VN_FitLine(ProcessSKUDiagResult.LeftEdgePoints, ProcessSKUDiagResult.LeftLine, hrPrev);	
+
+	
+hrPrev := F_VN_CreateContainer(MainLineContainer, ContainerType_Vector_TcVnPoint2_REAL, 2, hrPrev);
+
+FiducialSearchPoint[0] := 0;
+FiducialSearchPoint[1] := 0;
+	
+hrPrev := F_VN_AddToContainerElements_TcVnPoint2_REAL(FiducialSearchPoint, MainLineContainer, hrPrev);
+
+FiducialSearchPoint[0] := 100;
+FiducialSearchPoint[1] := 0;
+	
+hrPrev := F_VN_AddToContainerElements_TcVnPoint2_REAL(FiducialSearchPoint, MainLineContainer, hrPrev);
+	
+hrPrev := F_VN_FitLine(MainLineContainer, ImageEdgeLine, hrPrev); 
+
+hrPrev := F_VN_LineIntersectionPoint(ProcessSKUDiagResult.TopLine,
+										ProcessSKUDiagResult.LeftLine, 
+										ProcessSKUDiagResult.LineIntersectionPoint,
+										hrPrev);
+
+hrPrev := F_VN_LineIntersectionPointAndAngle(ProcessSKUDiagResult.TopLine,
+										ImageEdgeLine, 
+										UnusedIntersection,
+										ProcessSKUDiagResult.IntersectionAngle,
+										TRUE,
+										hrPrev);												
+fiducialTiming(START := FALSE,RESET := FALSE);
+fiducialTiming(START := FALSE, RESET := TRUE);	
+{endregion}
+
+//Takes the calibrated filtered image
+//threshold and inv threshold image to obtain reflection pixels
+//combine images and add back to original
+//threshold and inv threshold to obtain occlusion pixel
+//combine images to produce an image with reflection/occlusion removed - corrected image
+//check reflection pixels dont exceed a value
+//check occlusion pixels dont exceed a value
+{region "Occlusion/Reflection pixels removed, clearing invalid regions"}
+occlusionTiming(START := FALSE,RESET := FALSE);
+occlusionTiming(START := TRUE, RESET := FALSE);
+hrPrev := F_VN_CopyImage(medianFilteredImage,ThresholdImage, hrPrev);
+hrPrev := F_VN_CopyImage(medianFilteredImage, ThresholdInvImage, hrPrev);
+hrPrev := F_VN_CopyImage(medianFilteredImage, workingImage, hrPrev);
+	
+hrPrev := F_VN_Threshold(ThresholdImage, 
+							ThresholdImage, 
+							ProcessSKUDiagResult.MouldMaxLevel, 
+							ProcessSKUDiagResult.MouldMaxLevel, 
+							etcvnthresholdtype.TCVN_TT_BINARY, 
+							hrPrev);
+
+hrPrev := F_VN_Threshold(ThresholdInvImage, 
+							ThresholdInvImage, 
+							ProcessSKUDiagResult.MouldMaxLevel, 
+							1.0, 
+							etcvnthresholdtype.TCVN_TT_BINARY_INV, 
+							hrPrev);	
+
+hrPrev := F_VN_CountNonZeroPixels(ThresholdImage, ProcessSKUDiagResult.reflectionPixels, hrPrev);
+
+hrPrev := F_VN_MultiplyImages(workingImage, ThresholdInvImage, workingImage, hrPrev);
+
+hrPrev := F_VN_AddImages(ThresholdImage, workingImage, workingImage, hrPrev);
+	
+hrPrev := F_VN_CopyImage(workingImage,ThresholdImage, hrPrev);
+hrPrev := F_VN_CopyImage(workingImage, ThresholdInvImage, hrPrev);
+
+hrPrev := F_VN_Threshold(ThresholdInvImage, 
+							ThresholdInvImage, 
+							ProcessSKUDiagResult.MouldMinLevel, 
+							ProcessSKUDiagResult.MouldMinLevel, 
+							etcvnthresholdtype.TCVN_TT_BINARY_INV, 
+							hrPrev);
+
+hrPrev := F_VN_Threshold(ThresholdImage, 
+							ThresholdImage, 
+							ProcessSKUDiagResult.MouldMinLevel, 
+							1.0, 
+							etcvnthresholdtype.TCVN_TT_BINARY, 
+							hrPrev);
+							
+hrPrev := F_VN_CountNonZeroPixels(ThresholdInvImage, ProcessSKUDiagResult.occlusionPixel, hrPrev);
+
+hrPrev := F_VN_MultiplyImages(workingImage, ThresholdImage, workingImage, hrPrev);
+
+hrPrev := F_VN_AddImages(ThresholdInvImage, workingImage, workingImage, hrPrev);
+	
+ProcessSKUDiagResult.FullImagePixelCount := ProcessSKUDiagResult.ImageInfo.nHeight * ProcessSKUDiagResult.ImageInfo.nWidth;
+	
+ProcessSKUDiagResult.PercentageReflection := (TO_LREAL(ProcessSKUDiagResult.reflectionPixels)/TO_LREAL(ProcessSKUDiagResult.FullImagePixelCount))*100.0;
+ProcessSKUDiagResult.PercentageOcclusion := (TO_LREAL(ProcessSKUDiagResult.occlusionPixel)/TO_LREAL(ProcessSKUDiagResult.FullImagePixelCount))*100.0;
+	
+ProcessSKUDiagResult.ReflectionOcclusionInRange := (ProcessSKUDiagResult.PercentageReflection < VisionRecipe.VisionProcess.ReflectionMaxLimit)
+												AND (ProcessSKUDiagResult.PercentageOcclusion < VisionRecipe.VisionProcess.OcclusionMaxLimit);
+ 												
+hrPrev := F_VN_CopyImage(workingImage,CorrectedImage, hrPrev);												
+occlusionTiming(START := FALSE,RESET := FALSE);
+occlusionTiming(START := FALSE, RESET := TRUE);
+{endregion}	
+
+{region "Inspection of Wafers"}
+
+WaferTiming(START := FALSE, RESET := FALSE);
+WaferTiming(START := TRUE, RESET := FALSE);	
+	
+CurrentWaferIndex := 0;
+CurrentBarIndex := 0;
+//3D loops iterate over the wafers in each bar, bar in each row and row in SKU	
+//info on location stored for sending to Rockwell, to allow rejection
+FOR Row := 0 TO ((VisionRecipe.SKU.NumberOfBars/VisionRecipe.SKU.NumberBarsPerRow) - 1) DO
+	FOR Column := 0 TO (VisionRecipe.SKU.NumberBarsPerRow - 1) DO
+		//Set up Row and Bar data
+		//Create target info for wafer rpocessing for both X and Y
+		//foiund intersection point + barlocation scaled in dimension
+		BarXPositionLevel := TO_UDINT(ProcessSKUDiagResult.LineIntersectionPoint[0] + (visionRecipe.SKU.BarLocations[CurrentBarIndex].X / VisionRecipe.Pixels.X_mm));
+		BarXPosition := TO_UDINT(ProcessSKUDiagResult.LineIntersectionPoint[0] + (visionRecipe.SKU.BarLocations[CurrentBarIndex].X / VisionRecipe.Pixels.X_mm));
+		BarYPositionLevel := TO_UDINT(ProcessSKUDiagResult.LineIntersectionPoint[1] + (visionRecipe.SKU.BarLocations[CurrentBarIndex].Y / VisionRecipe.Pixels.Y_mm) - LevelsYPositionOffset);
+		BarYPosition := TO_UDINT(ProcessSKUDiagResult.LineIntersectionPoint[1] + (visionRecipe.SKU.BarLocations[CurrentBarIndex].Y / VisionRecipe.Pixels.Y_mm));
+		
+		FOR Cavity := 0 TO (VisionRecipe.SKU.WafersPerBar - 1) DO
+			//Set up wafer data 
+			//assign the location data for the wafer to wafer result
+			WaferResults[CurrentWaferIndex].WaferNumberInMould := CurrentWaferIndex + 1;
+			WaferResults[CurrentWaferIndex].ColumnNumber := TO_USINT(Column) + 1;
+			WaferResults[CurrentWaferIndex].RowNumber := TO_USINT(Row) + 1;
+			WaferResults[CurrentWaferIndex].WaferNumberInBar := TO_USINT(Cavity) + 1;
+			
+			WaferResults[CurrentWaferIndex].WaferCavityOffset.X := 0.0;
+			WaferResults[CurrentWaferIndex].WaferCavityOffset.Y := 0.0;
+			WaferResults[CurrentWaferIndex].WaferWidth := 0.0;					
+			WaferResults[CurrentWaferIndex].WaferAngleInDegrees := 0.0;
+			WaferResults[CurrentWaferIndex].WaferLength := 0.0;										
+			WaferResults[CurrentWaferIndex].SDWaferHeight := 0.0;
+			WaferResults[CurrentWaferIndex].MeanWaferHeight := 0.0;
+			WaferResults[CurrentWaferIndex].WaferLaminatePercentages[0] := 0.0;
+			WaferResults[CurrentWaferIndex].WaferLaminatePercentages[1] := 0.0;
+			WaferResults[CurrentWaferIndex].WaferLaminatePercentages[2] := 0.0;
+			WaferResults[CurrentWaferIndex].WaferLaminatePercentages[3] := 0.0;
+			WaferResults[CurrentWaferIndex].WaferStatus := FALSE;
+			WaferResults[CurrentWaferIndex].PercentageWaferInCavity := 0.0;
+			WaferResults[CurrentWaferIndex].PluggedCavity := FALSE;
+
+//take the target data above and add the individual wafer offset in barsetup with extended window
+//take the corrected image
+//copy region around the wafer cavity, taking a top and bottom section of SKU with it
+//take the top and bottom region and take the median to get the local level around wafer
+//calculate the bottom of mould 		
+{region "finds the reference levels of the cavity as a reference for wafer detection"}
+	
+			ProcessWaferResults[CurrentWaferIndex].WaferXPositionLevel := BarXPositionLevel + TO_UDINT(VisionRecipe.Cavities.CavitesOffsets[Cavity].X/VisionRecipe.Pixels.X_mm);
+			ProcessWaferResults[CurrentWaferIndex].WaferYPositionLeveL := BarYPositionLevel + TO_UDINT(VisionRecipe.Cavities.CavitesOffsets[Cavity].Y/VisionRecipe.Pixels.Y_mm);
+			hrPrev := F_VN_CopyImageRegion(CorrectedImage,
+											ProcessWaferResults[CurrentWaferIndex].WaferXPositionLevel,
+											ProcessWaferResults[CurrentWaferIndex].WaferYPositionLeveL,
+											TO_UDINT(VisionRecipe.Cavities.CavityWidth/VisionRecipe.Pixels.X_mm),
+											TO_UDINT((VisionRecipe.Cavities.CavityLength/VisionRecipe.Pixels.Y_mm) + LevelsWaferLengthExtension), 
+											workingImage, 
+											hrPrev);
+
+			hrPrev := F_VN_CopyImageRegion(workingImage,
+											TO_UDINT(visionrecipe.Cavities.LevelReference1.Offset.X),
+											TO_UDINT(visionrecipe.Cavities.LevelReference1.Offset.Y),
+											TO_UDINT(visionrecipe.Cavities.LevelReference1.Size.X - visionrecipe.Cavities.LevelReference1.Offset.X),
+											TO_UDINT(visionrecipe.Cavities.LevelReference1.Size.Y - visionrecipe.Cavities.LevelReference1.Offset.Y), 
+											Lvl1Image, 
+											hrPrev);
+
+			hrPrev := F_VN_CopyImageRegion(workingImage,
+											TO_UDINT(visionrecipe.Cavities.LevelReference2.Offset.X),
+											TO_UDINT(visionrecipe.Cavities.LevelReference2.Offset.Y),
+											TO_UDINT(visionrecipe.Cavities.LevelReference2.Size.X - visionrecipe.Cavities.LevelReference2.Offset.X),
+											TO_UDINT(visionrecipe.Cavities.LevelReference2.Size.Y - visionrecipe.Cavities.LevelReference2.Offset.Y),  
+											Lvl2Image, 
+											hrPrev);
+					
+			ImageMedian_Nestle.Execute(Lvl1Image, hrPrev);
+			ProcessWaferResults[CurrentWaferIndex].LevelRef1Median := ImageMedian_Nestle.Median;
+			ImageMedian_Nestle.Execute(Lvl2Image, hrPrev);
+			ProcessWaferResults[CurrentWaferIndex].LevelRef2Median := ImageMedian_Nestle.Median;
+			
+			ProcessWaferResults[CurrentWaferIndex].BottomMouldLevel := (ProcessWaferResults[CurrentWaferIndex].LevelRef1Median + ProcessWaferResults[CurrentWaferIndex].LevelRef2Median)/2.0;
+			
+			ProcessWaferResults[CurrentWaferIndex].DifferenceInRefLevel := (ABS(ProcessWaferResults[CurrentWaferIndex].LevelRef1Median - ProcessWaferResults[CurrentWaferIndex].LevelRef2Median))*VisionRecipe.Pixels.Z_mm;
+			ProcessWaferResults[CurrentWaferIndex].RefLevelInRange := 	ProcessWaferResults[CurrentWaferIndex].DifferenceInRefLevel < VisionRecipe.Cavities.MaxDifferenceBetweenLevels;
+
+{endregion}	
+		
+
+//take the target data above and add the individual wafer offset in barsetup with extended window
+//take the corrected image
+//copy region around the wafer cavity
+//threshold around the levels from above, taking pixels above min and pixels above max
+//uses these pixel counts to check number of pixles above percentage for plugged cavity
+//use these pixel count to check number of pixles above percentage for passing wafer
+{region "Calculate the percentage of cavity taken by wafer to calculate pass/fail"}
+	
+			ProcessWaferResults[CurrentWaferIndex].WaferXPosition := BarXPosition + TO_UDINT(VisionRecipe.Cavities.CavitesOffsets[Cavity].X/VisionRecipe.Pixels.X_mm);
+			ProcessWaferResults[CurrentWaferIndex].WaferYPosition := BarYPosition + TO_UDINT(VisionRecipe.Cavities.CavitesOffsets[Cavity].Y/VisionRecipe.Pixels.Y_mm);
+			hrPrev := F_VN_CopyImageRegion(CorrectedImage,
+									ProcessWaferResults[CurrentWaferIndex].WaferXPosition,
+									ProcessWaferResults[CurrentWaferIndex].WaferYPosition,
+									TO_UDINT(VisionRecipe.Cavities.CavityWidth/VisionRecipe.Pixels.X_mm),
+									TO_UDINT(VisionRecipe.Cavities.CavityLength/VisionRecipe.Pixels.Y_mm), 
+									workingImage, 
+									hrPrev);
+			workingImage.GetImageInfo(ProcessWaferResults[CurrentWaferIndex].ImageInfo);
+			ProcessWaferResults[CurrentWaferIndex].PixelCount := ProcessWaferResults[CurrentWaferIndex].ImageInfo.nHeight * ProcessWaferResults[CurrentWaferIndex].ImageInfo.nWidth;						
+			ProcessWaferResults[CurrentWaferIndex].LowThresholdLevel := ((ProcessWaferResults[CurrentWaferIndex].BottomMouldLevel - visionRecipe.Cavities.EmptyCavityDepth/VisionRecipe.Pixels.Z_mm) + VisionRecipe.Wafer.MinWaferHeightFromBase/VisionRecipe.Pixels.Z_mm);
+			ProcessWaferResults[CurrentWaferIndex].HighTresholdLevel := ((ProcessWaferResults[CurrentWaferIndex].BottomMouldLevel - visionRecipe.Cavities.EmptyCavityDepth/VisionRecipe.Pixels.Z_mm) + VisionRecipe.Wafer.MaxWaferHeightFromBase/VisionRecipe.Pixels.Z_mm);
+			ProcessWaferResults[CurrentWaferIndex].PluggedThresholdLevel := ((ProcessWaferResults[CurrentWaferIndex].BottomMouldLevel - VisionRecipe.Wafer.PlugDistanceFromMouldToSurface/VisionRecipe.Pixels.Z_mm)); 
+			
+			hrPrev := F_VN_Threshold(workingImage, 
+										ThresholdHighImage,
+										ProcessWaferResults[CurrentWaferIndex].PluggedThresholdLevel,
+										ThresholdMaxLevel,
+										ETcVnThresholdType.TCVN_TT_BINARY,
+										hrPrev);
+
+			hrPrev := F_VN_CountNonZeroPixels(ThresholdHighImage, ProcessWaferResults[CurrentWaferIndex].PixelsAbovePlugLevel, hrPrev);
+			
+			WaferResults[CurrentWaferIndex].PluggedCavity := TO_LREAL(ProcessWaferResults[CurrentWaferIndex].PixelsAbovePlugLevel)/ProcessWaferResults[CurrentWaferIndex].PixelCount*100.0 > TO_LREAL(VisionRecipe.Wafer.PluggedCavityPercentage);
+			
+			
+			hrPrev := F_VN_Threshold(workingImage, 
+										ThresholdLowImage,
+										ProcessWaferResults[CurrentWaferIndex].LowThresholdLevel, 
+										ThresholdMaxLevel,
+										ETcVnThresholdType.TCVN_TT_BINARY,
+										hrPrev);
+			//hrPrev := F_VN_CountNonZeroPixels(ThresholdLowImage, ProcessWaferResults[CurrentWaferIndex].PixelsAboveMinLevel, hrPrev);
+			
+										
+			hrPrev := F_VN_Threshold(workingImage, 
+										ThresholdHighImage,
+										ProcessWaferResults[CurrentWaferIndex].HighTresholdLevel,
+										ThresholdMaxLevel,
+										ETcVnThresholdType.TCVN_TT_BINARY,
+										hrPrev);
+			hrPrev := F_VN_SubtractImages(ThresholdLowImage,ThresholdHighImage, workingImage, hrPrev);
+
+			hrPrev := F_VN_CountNonZeroPixels(workingImage, ProcessWaferResults[CurrentWaferIndex].PixelsAboveMaxLevel, hrPrev);
+			
+			ProcessSKUDiagResult.IdealWaferArea := (WaferIdealHeight / VisionRecipe.Pixels.Y_mm) * (WaferIdealWidth / VisionRecipe.Pixels.X_mm);
+			
+			WaferResults[CurrentWaferIndex].PercentageWaferInCavity := TO_LREAL(ProcessWaferResults[CurrentWaferIndex].PixelsAboveMaxLevel)/ProcessSKUDiagResult.IdealWaferArea * 100.0;
+			IF WaferResults[CurrentWaferIndex].PercentageWaferInCavity > VisionRecipe.Wafer.PassingWaferCavityPercentage THEN
+				ProcessWaferResults[CurrentWaferIndex].WaferPercentageOK := TRUE;
+			ELSE
+				ProcessWaferResults[CurrentWaferIndex].WaferPercentageOK := FALSE;
+			END_IF
+{endregion}
+		
+
+//take the corrected image
+//copy region around the wafer cavity
+//perform a blob detection to find wafer sensor
+//use edge detection of left and top edge of wafer
+//extract the length and width and scale to real mm values
+{region "check Wafer Dimensions and Angle"}
+			IF NOT WaferResults[CurrentWaferIndex].PluggedCavity THEN
+				hrPrev := F_VN_CopyImageRegion(CorrectedImage,
+												ProcessWaferResults[CurrentWaferIndex].WaferXPosition,
+												ProcessWaferResults[CurrentWaferIndex].WaferYPosition,
+												TO_UDINT(VisionRecipe.Cavities.CavityWidth/VisionRecipe.Pixels.X_mm),
+												TO_UDINT(VisionRecipe.Cavities.CavityLength/VisionRecipe.Pixels.Y_mm), 
+												workingImage, 
+												hrPrev);
+	
+				ProcessWaferResults[CurrentWaferIndex].WaferIdealLevel := ((ProcessWaferResults[CurrentWaferIndex].BottomMouldLevel - visionRecipe.Cavities.EmptyCavityDepth/VisionRecipe.Pixels.Z_mm) + VisionRecipe.Wafer.HeightFromMouldBase/VisionRecipe.Pixels.Z_mm);
+				hrPrev := F_VN_Threshold(workingImage, 
+										ThresholdImage, 
+										ProcessWaferResults[CurrentWaferIndex].WaferIdealLevel, 
+										ThresholdMaxLevel, 
+										etcvnthresholdtype.TCVN_TT_BINARY, 
+										hrPrev);
+				hrPrev := F_VN_ConvertElementType(ThresholdImage, workingimage, etcvnelementtype.TCVN_ET_USINT, hrPrev);
+			
+				BlobDetectParams.fMinArea := (TO_REAL(VisionRecipe.Wafer.PassingWaferCavityPercentage) / RequiredPassingPixelFactor) * TO_REAL(ProcessWaferResults[CurrentWaferIndex].PixelCount);
+				
+				hrPrev := F_VN_DetectBlobs(workingImage, WaferBlobsDetectedInCavity, blobDetectParams, hrPrev);
+				
+				hrPrev := F_VN_GetNumberOfElements(WaferBlobsDetectedInCavity, NumberOfWafersDetectedInCavity, hrPrev);
+				
+				IF NumberOfWafersDetectedInCavity >= 1 THEN
+					hrPrev := F_VN_GetAt_ITcVnContainer(WaferBlobsDetectedInCavity, DetectedWaferOutline, 0,hrPrev);
+					
+					hrPrev := F_VN_ContourCenterOfMass(DetectedWaferOutline, ProcessWaferResults[CurrentWaferIndex].WaferCoM, hrPrev);
+					
+					WaferResults[CurrentWaferIndex].WaferCavityOffset.X := ((TO_REAL(ProcessWaferResults[CurrentWaferIndex].ImageInfo.nWidth)/2.0) - ProcessWaferResults[CurrentWaferIndex].WaferCoM[0]) * VisionRecipe.Pixels.X_mm;
+					WaferResults[CurrentWaferIndex].WaferCavityOffset.Y := ((TO_REAL(ProcessWaferResults[CurrentWaferIndex].ImageInfo.nHeight)/2.0) - ProcessWaferResults[CurrentWaferIndex].WaferCoM[1]) * VisionRecipe.Pixels.Y_mm;
+				END_IF
+				
+				EdgeDetectionStartPoint[0] := 0.0;
+				EdgeDetectionStartPoint[1] := TO_REAL(ProcessWaferResults[CurrentWaferIndex].ImageInfo.nHeight)/2.0;
+				EdgeDetectionStopPoint[0] := TO_REAL( ProcessWaferResults[CurrentWaferIndex].ImageInfo.nWidth) - 1.0;
+				EdgeDetectionStopPoint[1] := TO_REAL(ProcessWaferResults[CurrentWaferIndex].ImageInfo.nHeight)/2.0;;
+				F_VN_MeasureEdgeDistanceExp(workingImage,
+											ProcessWaferResults[CurrentWaferIndex].WidthInPixels,
+											EdgeDetectionStartPoint,
+											EdgeDetectionStopPoint,
+											etcvnedgedirection.TCVN_ED_DARK_TO_LIGHT,
+											128.0,
+											20,
+											TO_REAL(ProcessWaferResults[CurrentWaferIndex].ImageInfo.nHeight)/(2.0*11.0),
+											1,
+											FALSE,
+											0.0,
+											1,
+											0.001,
+											ETcVnEdgeDetectionAlgorithm.TCVN_EDA_INTERPOLATION,
+											ProcessWaferResults[CurrentWaferIndex].WaferLeftEdgePoints,
+											ProcessWaferResults[CurrentWaferIndex].WaferRightEdgePoints,
+											UnusedContainer,
+											hrPrev);
+				F_VN_GetNumberOfElements(ProcessWaferResults[CurrentWaferIndex].WaferLeftEdgePoints, ProcessWaferResults[CurrentWaferIndex].WaferPointsCount, hrPrev);	
+				
+				WaferResults[CurrentWaferIndex].WaferWidth := TO_REAL(VisionRecipe.Pixels.Y_mm * ProcessWaferResults[CurrentWaferIndex].WidthInPixels);					
+	
+				hrPrev := F_VN_CreateContainer(WaferFitLine, ContainerType_Vector_TcVnPoint2_REAL, 2, hrPrev);
+	
+				FiducialSearchPoint[0] := 0;
+				FiducialSearchPoint[1] := 0;
+					
+				hrPrev := F_VN_AddToContainerElements_TcVnPoint2_REAL(FiducialSearchPoint, WaferFitLine, hrPrev);
+				
+				FiducialSearchPoint[0] := 100;
+				FiducialSearchPoint[1] := 0;
+					
+				hrPrev := F_VN_AddToContainerElements_TcVnPoint2_REAL(FiducialSearchPoint, WaferFitLine, hrPrev);
+					
+				hrPrev := F_VN_FitLine(WaferFitLine, WaferEdgeLine, hrPrev); 
+				
+				hrPrev := F_VN_FitLine(ProcessWaferResults[CurrentWaferIndex].WaferLeftEdgePoints, ImageEdgeLine, hrPrev); 
+				
+				hrPrev := F_VN_LineIntersectionPointAndAngle(ImageEdgeLine,
+														WaferEdgeLine, 
+														UnusedIntersection,
+														WaferResults[CurrentWaferIndex].WaferAngleInDegrees,
+														TRUE,
+														hrPrev);												
+					
+											
+				EdgeDetectionStartPoint[0] := ProcessWaferResults[CurrentWaferIndex].ImageInfo.nWidth/2.0;;
+				EdgeDetectionStartPoint[1] := 0.0;
+				EdgeDetectionStopPoint[0] := TO_REAL(ProcessWaferResults[CurrentWaferIndex].ImageInfo.nWidth)/2.0;
+				EdgeDetectionStopPoint[1] := TO_REAL( ProcessWaferResults[CurrentWaferIndex].ImageInfo.nHeight) - 1.0;
+				F_VN_MeasureEdgeDistanceExp(workingImage,
+											ProcessWaferResults[CurrentWaferIndex].LengthInPixels,
+											EdgeDetectionStartPoint,
+											EdgeDetectionStopPoint,
+											etcvnedgedirection.TCVN_ED_DARK_TO_LIGHT,
+											128.0,
+											20,
+											TO_REAL(ProcessWaferResults[CurrentWaferIndex].ImageInfo.nHeight)/(2.0*11.0),
+											1,
+											FALSE,
+											0.0,
+											1,
+											0.001,
+											ETcVnEdgeDetectionAlgorithm.TCVN_EDA_INTERPOLATION,
+											ProcessWaferResults[CurrentWaferIndex].WaferTopEdgePoints,
+											ProcessWaferResults[CurrentWaferIndex].WaferBottomEdgePoints,
+											UnusedContainer,
+											hrPrev);
+											
+											
+				WaferResults[CurrentWaferIndex].WaferLength := TO_REAL(VisionRecipe.Pixels.X_mm * ProcessWaferResults[CurrentWaferIndex].LengthInPixels);										
+				IF WaferResults[CurrentWaferIndex].WaferLength < VisionRecipe.Wafer.MaxWaferLengthLimit
+					AND WaferResults[CurrentWaferIndex].WaferLength > VisionRecipe.Wafer.MinWaferLengthLimit
+					AND WaferResults[CurrentWaferIndex].WaferWidth < VisionRecipe.Wafer.MaxWaferWidthLimit
+					AND WaferResults[CurrentWaferIndex].WaferWidth > VisionRecipe.Wafer.MinWaferWidthLimit THEN
+					ProcessWaferResults[CurrentWaferIndex].WaferDimensionsOk := TRUE;
+				ELSE
+					ProcessWaferResults[CurrentWaferIndex].WaferDimensionsOk := FALSE;
+				END_IF
+				IF hrPrev <> 0 THEN
+					hrPrev := 0;
+				END_IF
+			
+{endregion}			
+
+//take the corrected image
+//copy region around the wafer cavity
+// take an internal region inside the wafer dimensions
+//find the max value within thr image
+//step down in increments through the heights to establish amount of wafer in eaxch height region
+//this assumes the highest point is good wafer
+{region 'Find wafer delaminations'}
+	
+				hrPrev := F_VN_CopyImageRegion(CorrectedImage,
+												ProcessWaferResults[CurrentWaferIndex].WaferXPosition,
+												ProcessWaferResults[CurrentWaferIndex].WaferYPosition,
+												TO_UDINT(VisionRecipe.Cavities.CavityWidth/VisionRecipe.Pixels.X_mm),
+												TO_UDINT(VisionRecipe.Cavities.CavityLength/VisionRecipe.Pixels.Y_mm), 
+												workingImage, 
+												hrPrev);
+				
+				hrPrev := F_VN_CopyImageRegion(workingImage,
+												TO_UDINT((ProcessWaferResults[CurrentWaferIndex].ImageInfo.nWidth/2.0) - (VisionRecipe.Wafer.WaferStatsImageWidth/VisionRecipe.Pixels.X_mm)/2.0),
+												TO_UDINT((ProcessWaferResults[CurrentWaferIndex].ImageInfo.nHeight/2.0) - (VisionRecipe.Wafer.WaferStatsImageHeight/VisionRecipe.Pixels.Y_mm)/2.0),
+												TO_UDINT(VisionRecipe.Wafer.WaferStatsImageWidth/VisionRecipe.Pixels.X_mm),
+												TO_UDINT(VisionRecipe.Wafer.WaferStatsImageHeight/VisionRecipe.Pixels.Y_mm), 
+												workingImage, 
+												hrPrev);
+				hrPrev := F_VN_PyramidDown(workingImage, workingImage, hrPrev);
+				hrPrev := F_VN_PyramidDown(workingImage, workingImage, hrPrev);
+				workingImage.GetImageInfo(ProcessWaferResults[CurrentWaferIndex].DelaminationImageInfo);
+				F_VN_CreateImageAndSetPixels(LaminateMask, 
+											ProcessWaferResults[CurrentWaferIndex].DelaminationImageInfo.nWidth, 
+											ProcessWaferResults[CurrentWaferIndex].DelaminationImageInfo.nHeight,
+											ETcVnElementType.TCVN_ET_UINT,
+											1,
+											Zero,	
+											hrPrev); 
+				F_VN_MaxPixelValue(workingImage, ProcessWaferResults[CurrentWaferIndex].MaxPixelValue,ProcessWaferResults[CurrentWaferIndex].MaxPixelLocation,hrPrev);
+				FOR i := 0 TO VisionRecipe.Wafer.LaminateInspectionLayerNumber - 1 DO
+					ProcessWaferResults[CurrentWaferIndex].DelaminationThreshold[i] := ProcessWaferResults[CurrentWaferIndex].MaxPixelValue[0] - ((i+1)*(VisionRecipe.Wafer.WaferLaminationHeight/VisionRecipe.Pixels.Z_mm));
+					hrPrev := F_VN_Threshold(workingImage, 
+										ThresholdImage,
+										ProcessWaferResults[CurrentWaferIndex].DelaminationThreshold[i], 
+										ThresholdMaxLevel,
+										ETcVnThresholdType.TCVN_TT_BINARY,
+										hrPrev);
+					hrPrev := F_VN_SubtractImages(ThresholdImage,
+												LaminateMask,
+												ThresholdImage, 
+												hrPrev);
+					hrPrev := F_VN_CountNonZeroPixels(ThresholdImage, Pixels, hrPrev);
+					WaferResults[CurrentWaferIndex].WaferLaminatePercentages[i] := TO_LREAL(Pixels)/(ProcessWaferResults[CurrentWaferIndex].DelaminationImageInfo.nHeight * ProcessWaferResults[CurrentWaferIndex].DelaminationImageInfo.nWidth)*100.0;
+					F_VN_BitwiseOrImages(LaminateMask,ThresholdImage,LaminateMask, hrPrev);
+				END_FOR
+				ProcessWaferResults[CurrentWaferIndex].ThresholdSum := 0.0;
+				FOR i := VisionRecipe.Wafer.LaminateStartLayer TO VisionRecipe.Wafer.LaminateStopLayer DO
+					 ProcessWaferResults[CurrentWaferIndex].ThresholdSum := ProcessWaferResults[CurrentWaferIndex].ThresholdSum + WaferResults[CurrentWaferIndex].WaferLaminatePercentages[i];
+				END_FOR
+				IF ProcessWaferResults[CurrentWaferIndex].ThresholdSum < VisionRecipe.Wafer.MaxLaminateSum
+								AND ProcessWaferResults[CurrentWaferIndex].ThresholdSum > VisionRecipe.Wafer.MinLaminateSum THEN
+					ProcessWaferResults[CurrentWaferIndex].WaferDelamOk := TRUE;
+				ELSE
+					ProcessWaferResults[CurrentWaferIndex].WaferDelamOk := FALSE;
+				END_IF
+
+{endregion}
+		
+//take the corrected image
+//copy region around the wafer cavity
+//take the wafer and find the mean and standard deviation of height map
+{region 'Extract wafer height mean and standard deviation data'}
+				hrPrev := F_VN_CopyImageRegion(CorrectedImage,
+												ProcessWaferResults[CurrentWaferIndex].WaferXPosition,
+												ProcessWaferResults[CurrentWaferIndex].WaferYPosition,
+												TO_UDINT(VisionRecipe.Cavities.CavityWidth/VisionRecipe.Pixels.X_mm),
+												TO_UDINT(VisionRecipe.Cavities.CavityLength/VisionRecipe.Pixels.Y_mm), 
+												workingImage, 
+												hrPrev);
+				
+				hrPrev := F_VN_CopyImageRegion(workingImage,
+												TO_UDINT((ProcessWaferResults[CurrentWaferIndex].ImageInfo.nWidth/2.0) - (VisionRecipe.Wafer.WaferStatsImageWidth/VisionRecipe.Pixels.X_mm)/2.0),
+												TO_UDINT((ProcessWaferResults[CurrentWaferIndex].ImageInfo.nHeight/2.0) - (VisionRecipe.Wafer.WaferStatsImageHeight/VisionRecipe.Pixels.Y_mm)/2.0),
+												TO_UDINT(VisionRecipe.Wafer.WaferStatsImageWidth/VisionRecipe.Pixels.X_mm),
+												TO_UDINT(VisionRecipe.Wafer.WaferStatsImageHeight/VisionRecipe.Pixels.Y_mm), 
+												workingImage, 
+												hrPrev);
+				
+				hrPrev := F_VN_ConvertElementType(workingImage, workingImage, etcvnelementtype.TCVN_ET_LREAL, hrPrev);
+				
+				hrPrev := F_VN_MultiplyImageWithScalar(visionRecipe.Pixels.Z_mm,workingImage, workingImage, hrPrev);
+				
+				hrPrev := F_VN_ImageAverageStdDev(workingImage, ProcessWaferResults[CurrentWaferIndex].WaferMeanHeight, ProcessWaferResults[CurrentWaferIndex].WaferSD, hrPrev);
+				
+				WaferResults[CurrentWaferIndex].SDWaferHeight := ProcessWaferResults[CurrentWaferIndex].WaferSD[0];
+				WaferResults[CurrentWaferIndex].MeanWaferHeight := ProcessWaferResults[CurrentWaferIndex].WaferMeanHeight[0] - (ProcessWaferResults[CurrentWaferIndex].BottomMouldLevel - visionRecipe.Cavities.EmptyCavityDepth/VisionRecipe.Pixels.Z_mm)*VisionRecipe.Pixels.Z_mm;
+				
+//Calculate rejection based on the various criteria, wafer height, width, height, fill, delamination				
+				IF  WaferResults[CurrentWaferIndex].MeanWaferHeight < VisionRecipe.Wafer.MaxWaferMeanHeightLimit
+								AND WaferResults[CurrentWaferIndex].MeanWaferHeight > VisionRecipe.Wafer.MinWaferMeanHeightLimit
+								AND WaferResults[CurrentWaferIndex].SDWaferHeight < VisionRecipe.Wafer.MaxWaferSDHeightLimit
+								AND WaferResults[CurrentWaferIndex].SDWaferHeight > VisionRecipe.Wafer.MinWaferSDHeightLimit THEN
+					ProcessWaferResults[CurrentWaferIndex].WaferHeightOK := TRUE;
+				ELSE
+					ProcessWaferResults[CurrentWaferIndex].WaferHeightOK := FALSE;
+				END_IF
+
+				WaferResults[CurrentWaferIndex].WaferStatus := ProcessWaferResults[CurrentWaferIndex].WaferPercentageOK 
+															AND ProcessWaferResults[CurrentWaferIndex].WaferHeightOK
+															AND ProcessWaferResults[CurrentWaferIndex].WaferDelamOk
+															AND ProcessWaferResults[CurrentWaferIndex].WaferDimensionsOk;
+			END_IF
+			hrPrev := 0;
+			CurrentWaferIndex := CurrentWaferIndex + 1;							
+{endregion}	
+
+		END_FOR
+		CurrentBarIndex := CurrentBarIndex + 1;
+	END_FOR
+END_FOR							
+
+WaferTiming(START := FALSE, RESET := FALSE);
+WaferTiming(START := FALSE, RESET := TRUE);	
+	
+{endregion}
+
+//Takes the calibrated filtered image
+//convert to RBG
+//iterate over all wafers in array and apply a green or red box to indicate pass fail on the individual wafers
+{region "Present Results generates an image to show wafer based pass/fail results"}
+
+DisplayTiming(START := FALSE, RESET := FALSE);
+DisplayTiming(START := TRUE, RESET := FALSE);	
+	
+hrPrev := F_VN_CopyImage(medianFilteredImage, workingDisplayImage, hrPrev);
+hrPrev := F_VN_SubtractScalarFromImage(workingDisplayImage, ProcessSKUDiagResult.MouldMinLevel,workingDisplayImage, hrPrev);
+hrPrev := F_VN_MultiplyImageWithScalar( (MaxValueIn8Bit / (ProcessSKUDiagResult.MouldMaxLevel-ProcessSKUDiagResult.MouldMinLevel)),workingDisplayImage, workingDisplayImage, hrPrev);
+hrPrev := F_VN_ConvertElementType(workingDisplayImage, workingDisplayImage, etcvnelementtype.TCVN_ET_USINT, hrPrev);
+hrPrev := ColourSpaceConversion.Transform(workingDisplayImage, workingDisplayImage, ETcVnColorSpaceTransform.TCVN_CST_GRAY_TO_RGB, hrPrev);
+
+CurrentWaferIndex := 0;	
+FOR Row := 0 TO ((VisionRecipe.SKU.NumberOfBars/VisionRecipe.SKU.NumberBarsPerRow) - 1) DO
+	FOR Column := 0 TO (VisionRecipe.SKU.NumberBarsPerRow - 1) DO
+		FOR Cavity := 0 TO (VisionRecipe.SKU.WafersPerBar - 1) DO
+			IF WaferResults[CurrentWaferIndex].WaferStatus THEN
+				hrPrev := F_VN_DrawRectangle(ProcessWaferResults[CurrentWaferIndex].WaferXPosition,
+											ProcessWaferResults[CurrentWaferIndex].WaferYPosition,
+											ProcessWaferResults[CurrentWaferIndex].WaferXPosition + TO_UDINT(VisionRecipe.Cavities.CavityWidth/VisionRecipe.Pixels.X_mm),
+											ProcessWaferResults[CurrentWaferIndex].WaferYPosition + TO_UDINT(VisionRecipe.Cavities.CavityLength/VisionRecipe.Pixels.Y_mm),
+ 											workingDisplayImage,
+											Green,
+											2,
+											hrPrev);
+			ELSE
+				hrPrev := F_VN_DrawRectangle(ProcessWaferResults[CurrentWaferIndex].WaferXPosition,
+											ProcessWaferResults[CurrentWaferIndex].WaferYPosition,
+											ProcessWaferResults[CurrentWaferIndex].WaferXPosition + TO_UDINT(VisionRecipe.Cavities.CavityWidth/VisionRecipe.Pixels.X_mm),
+											ProcessWaferResults[CurrentWaferIndex].WaferYPosition + TO_UDINT(VisionRecipe.Cavities.CavityLength/VisionRecipe.Pixels.Y_mm),
+ 											workingDisplayImage,
+											Red,
+											2,
+											hrPrev);
+			END_IF
+			CurrentWaferIndex := CurrentWaferIndex + 1;
+		END_FOR
+	END_FOR
+END_FOR
+	
+hrPrev := F_VN_CopyIntoDisplayableImage(workingDisplayImage, FinalImage, hrPrev);	
+
+DisplayTiming(START := FALSE, RESET := FALSE);
+DisplayTiming(START := FALSE, RESET := TRUE);	
+{endregion}	
+
+
+{region "CleanUp, releases the image contianers to prevent memory leaks"}	
+	
+FW_SafeRelease(ADR(workingImage));
+FW_SafeRelease(ADR(workingImage));
+FW_SafeRelease(ADR(CorrectedImage));
+FW_SafeRelease(ADR(ThresholdImage));
+FW_SafeRelease(ADR(ThresholdInvImage));
+FW_SafeRelease(ADR(Lvl1Image));
+FW_SafeRelease(ADR(Lvl2Image));
+
+FW_SafeRelease(ADR(medianFilteredImage));
+FW_SafeRelease(ADR(ThresholdHighImage));
+FW_SafeRelease(ADR(ThresholdLowImage));
+
+Result := ProcessVisionResult(hrPrev);
+Process := hrPrev;
+
+TotalTiming(START := FALSE, RESET := FALSE);
+TotalTiming(START := FALSE, RESET := TRUE);
+{endregion}
+
+### __shared_data_storage_string_table__.auxiliary (2957)
+//Class to process the image recieved from the 3D linescan camera
+//Class is called by the vision library on reciept of an image
+//Class recieves recipe data during Idle state of wafer inspection module
+FUNCTION_BLOCK ProcessSKU EXTENDS ImageProcess IMPLEMENTS I_ProcessSKU
+VAR
+	//General use image containers
+	workingImage : ITcVnImage;
+	workingDisplayImage : ITcVnImage;
+	ThresholdImage : ITcVnImage;
+	LaminateMask : ITcVnImage;
+	ThresholdInvImage : ITcVnImage;
+	
+	//Median image used for the SKU level operations
+	medianFilteredImage : ITcVnImage;
+	
+	//Cavity reference level images
+	Lvl1Image : ITcVnImage;
+	Lvl2Image : ITcVnImage;
+	
+	//Wafer inspection image after occlusion/reflection
+	CorrectedImage : ITcVnImage;
+	
+	//Cavity percentage images
+	ThresholdLowImage : ITcVnImage;
+	ThresholdHighImage : ITcVnImage;
+	
+	//Display images
+	OriginalImage : ITcVnDisplayableImage;
+	FinalImage : ITcVnDisplayableImage;
+	devimage : ITcVnDisplayableImage;
+	
+	//SKU Recipe
+	VisionRecipe : WaferInspection;
+	
+	//Results
+	ProcessSKUDiagResult : SKUInternalDiagnosticStruct;
+	ProcessWaferResults : ARRAY[0..MaximumWafersForProcess] OF WaferInternalDiagnosticStruct;
+	WaferResults : REFERENCE TO ARRAY[0..199] OF WaferResultStruct;
+	
+	//General Vision Functions
+	ColourSpaceConversion : ConvertColourSpace;
+	ImageMedian_Nestle : ImageMedian_16Bit<125000>;
+	
+	//Find Fiducial - Wafer Detection
+	MainLineContainer : ITcVnContainer;
+	FiducialSearchPoint : TcVnPoint2_REAL;
+	ImageEdgeLine : TcVnVector4_LREAL;
+	UnusedIntersection : TcVnPoint2_REAL;
+	
+	//Inspection of wafers
+	BarXPositionLevel : UDINT;
+	BarXPosition : UDINT;
+	BarYPositionLevel : UDINT;
+	BarYPosition : UDINT;
+	BlobDetectParams : TcVnParamsBlobDetection;
+	WaferBlobsDetectedInCavity: Tc3_Vision.ITcVnContainer;
+	DetectedWaferOutline: Tc3_Vision.ITcVnContainer;
+	Row,Column,Cavity : UINT;
+	NumberOfWafersDetectedInCavity: ULINT;
+	CurrentBarIndex : USINT;
+	CurrentWaferIndex: USINT;
+	EdgeDetectionStartPoint: Tc3_Vision.TcVnPoint2_REAL;
+	EdgeDetectionStopPoint: Tc3_Vision.TcVnPoint2_REAL;
+	UnusedContainer: Tc3_Vision.ITcVnContainer;
+	WaferFitLine: Tc3_Vision.ITcVnContainer;
+	WaferEdgeLine: Tc3_Vision.TcVnVector4_LREAL;
+	Result: CoreVision.VisionResult;
+	
+	//Programm monitoring and analysis
+	TotalTiming : Profiler;
+	WaferTiming : Profiler;
+	DisplayTiming : Profiler;
+	ScaleTiming : Profiler;
+	medianTiming : Profiler;
+	heightTiming : Profiler;
+	fiducialTiming : Profiler;
+	occlusionTiming : Profiler;
+	
+	WaferIdealWidth : LREAL := 20.0;
+	WaferIdealHeight : LREAL := 100.0;
+	
+	//Colour Variables
+	Red	: TcVnVector4_LREAL := [255, 0, 0];
+	Green :	TcVnVector4_LREAL := [0, 175, 0];
+	Zero: TcVnVector4_LREAL := [0, 0, 0];
+END_VAR
+VAR CONSTANT
+	//Image process constants
+	MaxValueIn8Bit : INT := 255;
+	ThresholdMaxLevel : UINT := 65530;
+	LevelsWaferLengthExtension : UINT := 126;
+	LevelsYPositionOffset: REAL := 60;
+	RequiredPassingPixelFactor: REAL := 130.0;
+	MaximumWafersForProcess : UINT := 199;
+END_VAR
+
+### __shared_data_storage_string_table__.auxiliary (2789)
+//Class to Implements the control for a wafer inspection system
+//Class takes a reference to the systemControl and the systemStatus struct 
+//Class handles the packml state machine operation
+//Class needs calling cyclically
+FUNCTION_BLOCK Wafer_Inspection_Module EXTENDS Module IMPLEMENTS I_WaferInspectionModule
+VAR
+	//Control and Status Structures
+	_HMI_Ctrl : SystemControl;
+	_HMI_Status : SystemStatus;
+	_IO_Ctrl : REFERENCE TO SystemControl;
+	_IO_Status : REFERENCE TO SystemStatus;
+	_System_Ctrl : SystemControl;
+	_System_Status : SystemStatus;
+	UPSandPersistent : PersistantDataAndUpsHandling('');
+	_WaferResults : REFERENCE TO ARRAY[0..199] OF WaferResultStruct;
+	_WaferResultsStatus : WaferResultStatistics;
+	
+	//PackML Controllers for state and mode
+	PackMLModeController : ModeController(Name := 'Wafer PackML Mode Controller',
+											StateController := PackMLStateMachine, 
+											Production := Production, 
+											Manual := Manual, 
+											Maintainence := Maintainence);
+	PackMLStateMachine : StateController(Name := 'Wafer PackML State Controller', 
+											ModeController := PackMLModeController);
+
+	
+	//PackML states
+	ProductionExecute : ExecuteProduction(PackMLStateMachine);
+	Starting : Starting;
+	Stopping : Stopping;
+	Idle : Idle(PackMLStateMachine);
+	Aborted : Aborted(PackMLStateMachine);
+	Stopped : Stopped(PackMLStateMachine);
+	ManualExecute : ExecuteManual(PackMLStateMachine);
+
+	//PackML Modes
+	Production : ProductionMode(Name := 'Mounting Production', StateMachine := PackMLStateMachine) := (Execute := ProductionExecute,
+																										Starting := Starting,
+																										Stopping := Stopping,
+																										Stopped := Stopped,
+																										Idle := Idle,
+																										Aborted := Aborted);
+	Manual : ManualMode(Name := 'Mounting Manual', StateMachine := PackMLStateMachine) := (Execute := ManualExecute,
+																										Starting := Starting,
+																										Stopping := Stopping,
+																										Stopped := Stopped,
+																										Idle := Idle,
+																										Aborted := Aborted);
+	Maintainence : MaintainenceMode(Name := 'Mounting Maintainence', StateMachine := PackMLStateMachine);
+	
+	//Vision Channel interfaces - decouple the PLC from the vision task
+	ChannelControl : VisionChannelControl(Name := 'Beckhoff Camera Control',VisionChannel := 0);
+	Channel : I_VisionChannel;
+	SKUProcess : I_ProcessSKU;
+	
+	//Recipe data structures
+	_SKUBarRecipe : SkuBarCavityRecipe;
+	_CavityRecipe : BarCavityRecipe;
+	_WaferRecipe : WaferInspectionRecipe;
+	_CameraRecipe : CameraSettingsRecipe;
+	_PixelRecipe : PixelCalibration;
+	_VisionProcessRecipe : WaferDetectionVisionRecipe;
+	_InvalidRecipeLoaded : BOOL;
+	_RecipeLoaded : BOOL;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (2583)
+
+// 	jsonLeftEdge := fbJson.FindMember(jsonSKU, 'SkuLeftEdgeSettings');
+// 	IF jsonLeftEdge <> 0 THEN
+// 		jsonPoint := fbJson.FindMember(jsonLeftEdge, 'aStartPoint');
+// 		IF jsonPoint <> 0 THEN
+// 			jsonNode := fbJson.FindMember(jsonPoint, 'X');
+// 			IF jsonNode <> 0 THEN stResult.SKU.SkuLeftEdgeSettings.aStartPoint[0] := fbJson.GetDouble(jsonNode); END_IF
+// 			jsonNode := fbJson.FindMember(jsonPoint, 'Y');
+// 			IF jsonNode <> 0 THEN stResult.SKU.SkuLeftEdgeSettings.aStartPoint[1] := fbJson.GetDouble(jsonNode); END_IF
+// 		END_IF
+// 
+// 		jsonPoint := fbJson.FindMember(jsonLeftEdge, 'aEndPoint');
+// 		IF jsonPoint <> 0 THEN
+// 			jsonNode := fbJson.FindMember(jsonPoint, 'X');
+// 			IF jsonNode <> 0 THEN stResult.SKU.SkuLeftEdgeSettings.aEndPoint[0] := fbJson.GetDouble(jsonNode); END_IF
+// 			jsonNode := fbJson.FindMember(jsonPoint, 'Y');
+// 			IF jsonNode <> 0 THEN stResult.SKU.SkuLeftEdgeSettings.aEndPoint[1] := fbJson.GetDouble(jsonNode); END_IF
+// 		END_IF
+// 
+// 		jsonNode := fbJson.FindMember(jsonLeftEdge, 'eEdgeDirection');
+// 		IF jsonNode <> 0 THEN stResult.SKU.SkuLeftEdgeSettings.eEdgeDirection := DINT_TO_INT(fbJson.GetInt(jsonNode)); END_IF
+// 
+// 		jsonNode := fbJson.FindMember(jsonLeftEdge, 'fMinStrength');
+// 		IF jsonNode <> 0 THEN stResult.SKU.SkuLeftEdgeSettings.fMinStrength := LREAL_TO_REAL(fbJson.GetDouble(jsonNode)); END_IF
+// 
+// 		jsonNode := fbJson.FindMember(jsonLeftEdge, 'nSearchLines');
+// 		IF jsonNode <> 0 THEN stResult.SKU.SkuLeftEdgeSettings.nSearchLines := DINT_TO_UDINT(fbJson.GetInt(jsonNode)); END_IF
+// 
+// 		jsonNode := fbJson.FindMember(jsonLeftEdge, 'fSearchLineDist');
+// 		IF jsonNode <> 0 THEN stResult.SKU.SkuLeftEdgeSettings.fSearchLineDist := LREAL_TO_REAL(fbJson.GetDouble(jsonNode)); END_IF
+// 
+// 		jsonNode := fbJson.FindMember(jsonLeftEdge, 'nMaxThickness');
+// 		IF jsonNode <> 0 THEN stResult.SKU.SkuLeftEdgeSettings.nMaxThickness := DINT_TO_UDINT(fbJson.GetInt(jsonNode)); END_IF
+// 
+// 		jsonNode := fbJson.FindMember(jsonLeftEdge, 'nSubpixelsIterations');
+// 		IF jsonNode <> 0 THEN stResult.SKU.SkuLeftEdgeSettings.nSubpixelsIterations := DINT_TO_UDINT(fbJson.GetInt(jsonNode)); END_IF
+// 
+// 		jsonNode := fbJson.FindMember(jsonLeftEdge, 'fApproxPrecision');
+// 		IF jsonNode <> 0 THEN stResult.SKU.SkuLeftEdgeSettings.fApproxPrecision := LREAL_TO_REAL(fbJson.GetDouble(jsonNode)); END_IF
+// 
+// 		jsonNode := fbJson.FindMember(jsonLeftEdge, 'eAlgorithm');
+// 		IF jsonNode <> 0 THEN stResult.SKU.SkuLeftEdgeSettings.eAlgorithm := DINT_TO_INT(fbJson.GetInt(jsonNode)); END_IF
+// 	END_IF
+// 
+// 	// 
+
+### __shared_data_storage_string_table__.auxiliary (2571)
+
+// 	jsonTopEdge := fbJson.FindMember(jsonSKU, 'SkuTopEdgeSettings');
+// 	IF jsonTopEdge <> 0 THEN
+// 		jsonPoint := fbJson.FindMember(jsonTopEdge, 'aStartPoint');
+// 		IF jsonPoint <> 0 THEN
+// 			jsonNode := fbJson.FindMember(jsonPoint, 'X');
+// 			IF jsonNode <> 0 THEN stResult.SKU.SkuTopEdgeSettings.aStartPoint[0] := fbJson.GetDouble(jsonNode); END_IF
+// 			jsonNode := fbJson.FindMember(jsonPoint, 'Y');
+// 			IF jsonNode <> 0 THEN stResult.SKU.SkuTopEdgeSettings.aStartPoint[1] := fbJson.GetDouble(jsonNode); END_IF
+// 		END_IF
+// 
+// 		jsonPoint := fbJson.FindMember(jsonTopEdge, 'aEndPoint');
+// 		IF jsonPoint <> 0 THEN
+// 			jsonNode := fbJson.FindMember(jsonPoint, 'X');
+// 			IF jsonNode <> 0 THEN stResult.SKU.SkuTopEdgeSettings.aEndPoint[0] := fbJson.GetDouble(jsonNode); END_IF
+// 			jsonNode := fbJson.FindMember(jsonPoint, 'Y');
+// 			IF jsonNode <> 0 THEN stResult.SKU.SkuTopEdgeSettings.aEndPoint[1] := fbJson.GetDouble(jsonNode); END_IF
+// 		END_IF
+// 
+// 		jsonNode := fbJson.FindMember(jsonTopEdge, 'eEdgeDirection');
+// 		IF jsonNode <> 0 THEN stResult.SKU.SkuTopEdgeSettings.eEdgeDirection := DINT_TO_INT(fbJson.GetInt(jsonNode)); END_IF
+// 
+// 		jsonNode := fbJson.FindMember(jsonTopEdge, 'fMinStrength');
+// 		IF jsonNode <> 0 THEN stResult.SKU.SkuTopEdgeSettings.fMinStrength := LREAL_TO_REAL(fbJson.GetDouble(jsonNode)); END_IF
+// 
+// 		jsonNode := fbJson.FindMember(jsonTopEdge, 'nSearchLines');
+// 		IF jsonNode <> 0 THEN stResult.SKU.SkuTopEdgeSettings.nSearchLines := DINT_TO_UDINT(fbJson.GetInt(jsonNode)); END_IF
+// 
+// 		jsonNode := fbJson.FindMember(jsonTopEdge, 'fSearchLineDist');
+// 		IF jsonNode <> 0 THEN stResult.SKU.SkuTopEdgeSettings.fSearchLineDist := LREAL_TO_REAL(fbJson.GetDouble(jsonNode)); END_IF
+// 
+// 		jsonNode := fbJson.FindMember(jsonTopEdge, 'nMaxThickness');
+// 		IF jsonNode <> 0 THEN stResult.SKU.SkuTopEdgeSettings.nMaxThickness := DINT_TO_UDINT(fbJson.GetInt(jsonNode)); END_IF
+// 
+// 		jsonNode := fbJson.FindMember(jsonTopEdge, 'nSubpixelsIterations');
+// 		IF jsonNode <> 0 THEN stResult.SKU.SkuTopEdgeSettings.nSubpixelsIterations := DINT_TO_UDINT(fbJson.GetInt(jsonNode)); END_IF
+// 
+// 		jsonNode := fbJson.FindMember(jsonTopEdge, 'fApproxPrecision');
+// 		IF jsonNode <> 0 THEN stResult.SKU.SkuTopEdgeSettings.fApproxPrecision := LREAL_TO_REAL(fbJson.GetDouble(jsonNode)); END_IF
+// 
+// 		jsonNode := fbJson.FindMember(jsonTopEdge, 'eAlgorithm');
+// 		IF jsonNode <> 0 THEN stResult.SKU.SkuTopEdgeSettings.eAlgorithm := DINT_TO_INT(fbJson.GetInt(jsonNode)); END_IF
+// 	END_IF
+// 
+// END_IF // jsonSKU
+
+### __shared_data_storage_string_table__.auxiliary (1882)
+CASE OperatingState OF 
+	0:
+		IF ChannelControl.ImageProcessing THEN
+			_MachineStatus.InspectionCount := _MachineStatus.InspectionCount + 1;
+			OperatingState := 1;
+		END_IF
+	1:
+		IF NOT ChannelControl.ImageProcessing THEN
+			IF ChannelControl.ImageProcessingCompletedSuccessfully THEN
+				OperatingState := 0;
+				FOR i := 0 TO (_SKURecipe.NumberOfBars * _SKURecipe.WafersPerBar) - 1 DO
+					IF _WaferResults[i].WaferStatus THEN
+						PassingCount := PassingCount + 1;
+					ELSE
+						FailedCount := FailedCount + 1;
+						FailingImages[FailingImageCounter] := TO_INT(_MachineStatus.InspectionCount) - 1;
+						FailingImageCounter := FailingImageCounter + 1;
+					END_IF
+				END_FOR
+				_WaferResultStatus.PassingWafersThisSku := PassingCount;
+				_WaferResultStatus.FailedWafersThisSku := FailedCount;
+				Last10SKUPassCounts[Last10SkuCounter] := PassingCount;
+				TotalPassed := TotalPassed + PassingCount;
+				TotalFailed := TotalFailed + FailedCount;
+				IF Last10SkuCounter = 9 THEN
+					Last10SkuCounter := 0;
+				ELSE
+					Last10SkuCounter := Last10SkuCounter + 1;
+				END_IF
+				FOR i := 0 TO 9 DO
+					SumPassingCountLast10 := Last10SKUPassCounts[i] + SumPassingCountLast10;
+				END_FOR
+				_WaferResultStatus.PassingWaferPercentageLAst10Skus := (TO_LREAL(SumPassingCountLast10)/270.0)*100.0;
+				_WaferResultStatus.FailedWaferPercentageLast10Skus := 100.0 - _WaferResultStatus.PassingWaferPercentageLAst10Skus;
+				_WaferResultStatus.PassingWaferPercentageTotal := (TO_LREAL(TotalPassed)/TO_LREAL(((_SKURecipe.WafersPerBar*_SKURecipe.NumberOfBars)*_MachineStatus.InspectionCount)))*100.0;
+				_WaferResultStatus.FailedWaferPercentageTotal := 100.0 - _WaferResultStatus.PassingWaferPercentageTotal;
+			ELSE
+				OperatingState := 99;
+			END_IF
+		END_IF
+END_CASE
+
+IF _MachineCtrl.Stop OR _MachineCtrl.Reset OR _MachineCtrl.Shutdown THEN
+	_stateMachine.RequestStop();
+END_IF
+
+### __shared_data_storage_string_table__.auxiliary (1645)
+// Assigns the system status data to the system status byte for EIP
+_SystemStatusBytes[0].0 := _SystemStatus.HeartBeat;
+_SystemStatusBytes[0].1 := _SystemStatus.SystemReady;
+_SystemStatusBytes[0].2 := _SystemStatus.SystemRunning;
+_SystemStatusBytes[0].3 := _SystemStatus.SystemWarning;
+_SystemStatusBytes[0].4 := _SystemStatus.SystemFault;
+_SystemStatusBytes[0].5 := _SystemStatus.PowerFailureShutdown;
+
+// Assigns the SKU data to the system status byte for EIP
+_SystemStatusBytes[1] := TO_BYTE(_SystemStatus.TotalBars);
+_SystemStatusBytes[2] := TO_BYTE(_SystemStatus.TotalRows);
+_SystemStatusBytes[3] := TO_BYTE(_SystemStatus.TotalWafers);
+
+// Assigns the SKU ID to the system status byte for EIP
+UINTBYTEConversion.aUINT := _SystemStatus.CurrentSKUID;
+_SystemStatusBytes[4] := UINTBYTEConversion.theBytes[0];
+_SystemStatusBytes[5] := UINTBYTEConversion.theBytes[1];
+
+// Assigns the Inspection Count to the system status byte for EIP
+UDINTBYTEConversion.aUDINT := _SystemStatus.InspectionCount;
+_SystemStatusBytes[6] := UDINTBYTEConversion.theBytes[0];
+_SystemStatusBytes[7] := UDINTBYTEConversion.theBytes[1];
+_SystemStatusBytes[8] := UDINTBYTEConversion.theBytes[2];
+_SystemStatusBytes[9] := UDINTBYTEConversion.theBytes[3];
+
+// Assigns the SKU Name to the system status byte for EIP
+STRING20BYTEConversion.aString := _SystemStatus.CurrentSKUName;
+FOR i := 0 TO 19 DO
+	_SystemStatusBytes[10 + i] := STRING20BYTEConversion.theBytes[i];
+END_FORp1e2c8c3ff-2f08-4008-8f74-a2110cb38b56_Impl_LineIdsq9METHOD ProcessStatusForEIP : BOOL
+VAR
+	i : UINT;
+END_VAR
+r1e2c8c3ff-2f08-4008-8f74-a2110cb38b56_Decl_LineIdss$1916a83d-044a-42e7-96f7-77c8c6d2aa51t
+
+### __shared_data_storage_string_table__.auxiliary (1503)
+//======================================================================
+// WAFER  (WaferInspectionRecipe)
+//======================================================================
+jsonWafer := fbJson.FindMember(jsonRoot, 'Wafer');
+IF jsonWafer <> 0 THEN
+
+	jsonNode := fbJson.FindMember(jsonWafer, 'Name');
+	IF jsonNode <> 0 THEN stResult.Wafer.Name := fbJson.GetString(jsonNode); END_IF
+
+	jsonNode := fbJson.FindMember(jsonWafer, 'InspectionType');
+   // IF jsonNode <> 0 THEN stResult.Wafer.InspectionType := DINT_TO_INT(fbJson.GetInt(jsonNode)); END_IF
+
+	jsonNode := fbJson.FindMember(jsonWafer, 'MaxWaferHeightFromBase');
+	IF jsonNode <> 0 THEN stResult.Wafer.MaxWaferHeightFromBase := DINT_TO_UDINT(fbJson.GetInt(jsonNode)); END_IF
+
+	jsonNode := fbJson.FindMember(jsonWafer, 'MinWaferHeightFromBase');
+	IF jsonNode <> 0 THEN stResult.Wafer.MinWaferHeightFromBase := DINT_TO_UDINT(fbJson.GetInt(jsonNode)); END_IF
+
+	jsonNode := fbJson.FindMember(jsonWafer, 'PassingWaferCavityPercentage');
+	IF jsonNode <> 0 THEN stResult.Wafer.PassingWaferCavityPercentage := DINT_TO_UDINT(fbJson.GetInt(jsonNode)); END_IF
+
+	jsonNode := fbJson.FindMember(jsonWafer, 'PluggedCavityPercentage');
+	IF jsonNode <> 0 THEN stResult.Wafer.PluggedCavityPercentage := DINT_TO_UDINT(fbJson.GetInt(jsonNode)); END_IF
+
+	jsonNode := fbJson.FindMember(jsonWafer, 'MaxNumberFailedBarsAllowed');
+	IF jsonNode <> 0 THEN stResult.Wafer.MaxNumberFailedWafersAllowed := DINT_TO_UINT(fbJson.GetInt(jsonNode)); END_IF
+
+END_IF // jsonWafer
+
+### __shared_data_storage_string_table__.auxiliary (1458)
+//======================================================================
+// PIXELS  (PixelCalibration)
+//======================================================================
+jsonPixels := fbJson.FindMember(jsonRoot, 'Pixels');
+IF jsonPixels <> 0 THEN
+
+	jsonNode := fbJson.FindMember(jsonPixels, 'X_mm');
+	IF jsonNode <> 0 THEN stResult.Pixels.X_mm := fbJson.GetDouble(jsonNode); END_IF
+
+	jsonNode := fbJson.FindMember(jsonPixels, 'Y_mm');
+	IF jsonNode <> 0 THEN stResult.Pixels.Y_mm := fbJson.GetDouble(jsonNode); END_IF
+
+	jsonNode := fbJson.FindMember(jsonPixels, 'Z_mm');
+	IF jsonNode <> 0 THEN stResult.Pixels.Z_mm := fbJson.GetDouble(jsonNode); END_IF
+
+	jsonNode := fbJson.FindMember(jsonPixels, 'MaxMouldHeight');
+	IF jsonNode <> 0 THEN stResult.Pixels.MaxMouldHeight := fbJson.GetDouble(jsonNode); END_IF
+
+	jsonNode := fbJson.FindMember(jsonPixels, 'MinMouldHeight');
+	IF jsonNode <> 0 THEN stResult.Pixels.MinMouldHeight := fbJson.GetDouble(jsonNode); END_IF
+
+	jsonNode := fbJson.FindMember(jsonPixels, 'CrossMachineRef');
+	IF jsonNode <> 0 THEN stResult.Pixels.CrossMachineRef := fbJson.GetDouble(jsonNode); END_IF
+
+	jsonNode := fbJson.FindMember(jsonPixels, 'SickRulerOffset');
+	IF jsonNode <> 0 THEN stResult.Pixels.SickRulerOffset := fbJson.GetDouble(jsonNode); END_IF
+
+	jsonNode := fbJson.FindMember(jsonPixels, 'SickRulerScale');
+	IF jsonNode <> 0 THEN stResult.Pixels.SickRulerScale := fbJson.GetDouble(jsonNode); END_IF
+
+END_IF // jsonPixels
+
+### __shared_data_storage_string_table__.auxiliary (1438)
+// Cyclic logic called cylcially in main code
+//responsible for assigning the data trhough the structres.
+
+//passes heart beat to allow detection of comms loss on rockwell end
+_IO_Status.HeartBeat := _IO_Ctrl.HeartBeat;
+
+//assigns the control signals from the EthernetIP or HMI
+_System_Ctrl.Run := _IO_Ctrl.Run OR _HMI_Ctrl.Run;
+_System_Ctrl.Stop := _IO_Ctrl.Stop OR _HMI_Ctrl.Stop;
+_System_Ctrl.Reset := _IO_Ctrl.Reset OR _HMI_Ctrl.Reset;
+_System_Ctrl.Shutdown := _IO_Ctrl.Shutdown OR _HMI_Ctrl.Shutdown;
+
+//assigns the system status values to the hmi and the ethernetip structures
+_IO_Status.SystemReady := _HMI_Status.SystemReady := _System_Status.SystemReady;
+_IO_Status.SystemRunning := _HMI_Status.SystemRunning := _System_Status.SystemRunning;
+_IO_Status.SystemWarning := _HMI_Status.SystemWarning := _System_Status.SystemWarning;
+_IO_Status.SystemFault := _HMI_Status.SystemFault := _System_Status.SystemFault;
+_IO_Status.InspectionCount := _HMI_Status.InspectionCount := _System_Status.InspectionCount;
+
+//if the recipe is loaded pass the recipe data to the hmi variables
+IF _RecipeLoaded THEN
+	_IO_Status.TotalBars := _HMI_Status.TotalBars := TO_USINT(_SKUBarRecipe.NumberOfBars);
+	_IO_Status.TotalRows := _HMI_Status.TotalRows := TO_USINT(_SKUBarRecipe.NumberOfBars/_SKUBarRecipe.NumberBarsPerRow);
+	_IO_Status.TotalWafers := _HMI_Status.TotalWafers := TO_USINT(_SKUBarRecipe.NumberOfBars * _SKUBarRecipe.WafersPerBar);
+END_IF
+
+
+### __shared_data_storage_string_table__.auxiliary (1424)
+;// //======================================================================
+// // SKU  (SkuBarCavityRecipe)
+// //======================================================================
+// jsonSKU := fbJson.FindMember(jsonRoot, 'SKU');
+// IF jsonSKU <> 0 THEN
+// 
+// 	jsonNode := fbJson.FindMember(jsonSKU, 'MouldType');
+// 	IF jsonNode <> 0 THEN stResult.SKU.MouldType := fbJson.GetString(jsonNode); END_IF
+// 
+// 	jsonNode := fbJson.FindMember(jsonSKU, 'MouldWidth_CD');
+// 	IF jsonNode <> 0 THEN stResult.SKU.MouldWidth_CD := DINT_TO_UDINT(fbJson.GetInt(jsonNode)); END_IF
+// 
+// 	jsonNode := fbJson.FindMember(jsonSKU, 'MouldLength_MD');
+// 	IF jsonNode <> 0 THEN stResult.SKU.MouldLength_MD := DINT_TO_UDINT(fbJson.GetInt(jsonNode)); END_IF
+// 
+// 	jsonNode := fbJson.FindMember(jsonSKU, 'ProductType');
+// 	////IF jsonNode <> 0 THEN stResult.SKU.ProductType := DINT_TO_UINT(fbJson.GetInt(jsonNode)); END_IF
+// 
+// 	jsonNode := fbJson.FindMember(jsonSKU, 'CavityType');
+// 	//IF jsonNode <> 0 THEN stResult.SKU.CavityType := DINT_TO_UINT(fbJson.GetInt(jsonNode)); END_IF
+// 
+// 	jsonNode := fbJson.FindMember(jsonSKU, 'NumberBarsPerRow');
+// 	IF jsonNode <> 0 THEN stResult.SKU.NumberBarsPerRow := DINT_TO_UINT(fbJson.GetInt(jsonNode)); END_IF
+// 
+// 	jsonNode := fbJson.FindMember(jsonSKU, 'NumberOfBars');
+// 	IF jsonNode <> 0 THEN stResult.SKU.NumberOfBars := DINT_TO_UINT(fbJson.GetInt(jsonNode)); END_IF
+// 
+// 	// 
+
+### __shared_data_storage_string_table__.auxiliary (1264)
+	TYPE WaferInternalDiagnosticStruct :
+STRUCT
+	WaferNumberInMould : USINT;
+	ImageInfo: TcVnImageInfo;
+	WaferXPosition : UDINT;
+	WaferYPosition : UDINT;
+	WaferXPositionLevel : UDINT;
+	WaferYPositionLeveL : UDINT;
+	LevelRef1Median: LREAL;
+	LevelRef2Median: LREAL;
+	DifferenceInRefLevel: LREAL;
+	RefLevelInRange: BOOL;
+	BottomMouldLevel: LREAL;
+	PixelCount : ULINT;
+	LowThresholdLevel: LREAL;
+	HighTresholdLevel: LREAL;
+	PluggedThresholdLevel : LREAL;
+	PixelsAboveMinLevel: ULINT;
+	PixelsAboveMaxLevel: ULINT;
+	PixelsAbovePlugLevel : ULINT;
+	WaferIdealLevel : LREAL;
+	WaferLeftEdgePoints: Tc3_Vision.ITcVnContainer;
+	WaferRightEdgePoints: Tc3_Vision.ITcVnContainer;
+	WaferTopEdgePoints: Tc3_Vision.ITcVnContainer;
+	WaferBottomEdgePoints: Tc3_Vision.ITcVnContainer;
+	WidthInPixels : REAL;
+	LengthInPixels : REAL;
+	WaferCoM: Tc3_Vision.TcVnPoint2_LREAL;
+	WaferSD : Tc3_Vision.TcVnVector4_LREAL;
+	WaferMeanHeight: Tc3_Vision.TcVnVector4_LREAL;
+	WaferPointsCount: ULINT;
+	MaxPixelValue : TcVnVector4_LREAL;
+	MaxPixelLocation : TcVnPoint2_DINT;
+	DelaminationImageInfo: TcVnImageInfo;
+	DelaminationThreshold : ARRAY[0..3] OF LREAL;
+	ThresholdSum : LREAL;
+	WaferPercentageOK : BOOL;
+	WaferDimensionsOk : BOOL;
+	WaferDelamOk : BOOL;
+	WaferHeightOK : BOOL;
+END_STRUCT
+END_TYPE
+
+
+### __shared_data_storage_string_table__.auxiliary (1173)
+	PackMLModeController.RegisterWithParent(THIS^);
+PackMLStateMachine.RegisterWithParent(THIS^);
+
+ChannelControl.RegisterWithParent(THIS^);
+
+
+ProductionExecute.SetDependencies(Control := ChannelControl, 
+									MachineCtrl := _System_Ctrl,
+									MachineStatus := _System_Status,
+									WaferResults := _WaferResults,
+									WaferResultStatus := _WaferResultsStatus,
+									SKURecipe := _SKUBarRecipe);
+Starting.SetDependencies(Control := ChannelControl, MachineStatus := _System_Status);
+Stopping.SetDependencies(Control := ChannelControl, MachineStatus := _System_Status);
+Idle.SetDependencies(Control := ChannelControl,
+						SKUBar :=	_SKUBarRecipe,
+						Cavity :=	_CavityRecipe,
+						Wafer :=	_WaferRecipe,
+						Camera := _CameraRecipe,
+						Pixel := _PixelRecipe,
+						VisionProcess := _VisionProcessRecipe, 
+						Process := SKUProcess, 
+						MachineCtrl := _System_Ctrl, 
+						MachineStatus := _System_Status,
+						Ups_Persistent := UPSandPersistent,
+						InValidRecipe := _InvalidRecipeLoaded,
+						RecipeLoadedFlag := _RecipeLoaded);
+Stopped.SetDependencies(Control := ChannelControl);
+ManualExecute.SetDependencies(Control := ChannelControl);
+
+
+
+### __shared_data_storage_string_table__.auxiliary (1173)
+//  //======================================================================
+// // CAVITIES  (BarCavityRecipe)
+// //======================================================================
+// jsonCavities := fbJson.FindMember(jsonRoot, 'Cavities');
+// IF jsonCavities <> 0 THEN
+// 
+// 	jsonNode := fbJson.FindMember(jsonCavities, 'CavityType');
+// 	IF jsonNode <> 0 THEN stResult.Cavities.CavityType := fbJson.GetString(jsonNode); END_IF
+// 
+// 	jsonNode := fbJson.FindMember(jsonCavities, 'MaxDifferenceBetweenLevels');
+// 	IF jsonNode <> 0 THEN stResult.Cavities.MaxDifferenceBetweenLevels := fbJson.GetDouble(jsonNode); END_IF
+// 
+// 	jsonNode := fbJson.FindMember(jsonCavities, 'CavityWidth');
+// 	IF jsonNode <> 0 THEN stResult.Cavities.CavityWidth := DINT_TO_UDINT(fbJson.GetInt(jsonNode)); END_IF
+// 
+// 	jsonNode := fbJson.FindMember(jsonCavities, 'CavityLength');
+// 	IF jsonNode <> 0 THEN stResult.Cavities.CavityLength := DINT_TO_UDINT(fbJson.GetInt(jsonNode)); END_IF
+// 
+// 	jsonNode := fbJson.FindMember(jsonCavities, 'EmptyCavityDepth');
+// 	IF jsonNode <> 0 THEN stResult.Cavities.EmptyCavityDepth := DINT_TO_UDINT(fbJson.GetInt(jsonNode)); END_IF
+// 
+// 	// 
+
+### projectinformations.auxiliary (1125)
+<?xml version="1.0"?>
+<ProjectInformations xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <properties>
+    <Company>Nestle</Company>
+    <Title>Nestle Vanguard Wafer Inspection</Title>
+    <Version>0.0.0.11</Version>
+    <Released>false</Released>
+    <LibraryCategories>Nestle_Vanguard</LibraryCategories>
+    <DefaultNamespace>Vanguard_WaferDetection</DefaultNamespace>
+    <Placeholder>Vanguard_WaferDetection</Placeholder>
+    <Author>Nestle</Author>
+    <Description>Nestle Library for implementation of wafer inspection</Description>
+  </properties>
+  <Properties>
+    <Company>Nestle</Company>
+    <Title>Nestle Vanguard Wafer Inspection</Title>
+    <Version>0.0.0.11</Version>
+    <Released>false</Released>
+    <LibraryCategories>Nestle_Vanguard</LibraryCategories>
+    <DefaultNamespace>Vanguard_WaferDetection</DefaultNamespace>
+    <Placeholder>Vanguard_WaferDetection</Placeholder>
+    <Author>Nestle</Author>
+    <Description>Nestle Library for implementation of wafer inspection</Description>
+  </Properties>
+</ProjectInformations>
+
+### __shared_data_storage_string_table__.auxiliary (1059)
+CASE IdleState OF
+	0:
+		_MachineStatus.SystemReady := TRUE;
+		IF RecipeActivated THEN
+			RecipeActivated := FALSE;
+			_RecipeLoaded := FALSE;
+			_InValidRecipe := FALSE;
+			IdleState := 1;
+		END_IF
+	1:
+		RecipeRecieveTimer.IN := TRUE;
+		IF RecipeRecieveTimer.Q THEN
+			RecipeRecieveTimer.IN := FALSE;
+			IdleState := 2;
+		END_IF
+	2:
+		IF _SKUBarRecipe.NumberBarsPerRow < 1 OR
+			//_VisionProcessRecipe.MedianFilterSize <> 5 OR
+			_WaferRecipe.PassingWaferCavityPercentage < 50 OR
+			_CavityRecipe.CavityLength < 10 OR
+			_CameraRecipe.ExposureTime = 0 OR
+			_PixelRecipe.X_mm = 0 THEN
+			_InValidRecipe := TRUE;
+			IdleState := 0;
+		ELSE
+			IdleState := 3;
+		END_IF
+		
+	3:
+		IF SUCCEEDED(_Process.LoadRecipe(_SKUBarRecipe, _CavityRecipe, _WaferRecipe, _CameraRecipe, _PixelRecipe,	_VisionProcessRecipe)) THEN 
+			_RecipeLoaded := TRUE;
+			IdleState := 4;
+		END_IF
+	4:
+		IF _MachineCtrl.Run THEN
+			IdleState := 0;
+			_stateMachine.RequestStart();
+		END_IF
+END_CASE
+RecipeRecieveTimer();
+
+IF _MachineCtrl.Shutdown THEN
+	_Ups_Persistent.ManualShutdown();
+END_IF
+
+### __shared_data_storage_string_table__.auxiliary (987)
+
+// 	jsonLvlRef2 := fbJson.FindMember(jsonCavities, 'LevelReference2');
+// 	IF jsonLvlRef2 <> 0 THEN
+// 		jsonOffset := fbJson.FindMember(jsonLvlRef2, 'Offset');
+// 		IF jsonOffset <> 0 THEN
+// 			jsonNode := fbJson.FindMember(jsonOffset, 'X');
+// 			IF jsonNode <> 0 THEN stResult.Cavities.LevelReference2.Offset.X := fbJson.GetDouble(jsonNode); END_IF
+// 			jsonNode := fbJson.FindMember(jsonOffset, 'Y');
+// 			IF jsonNode <> 0 THEN stResult.Cavities.LevelReference2.Offset.Y := fbJson.GetDouble(jsonNode); END_IF
+// 		END_IF
+// 
+// 		jsonSize := fbJson.FindMember(jsonLvlRef2, 'Size');
+// 		IF jsonSize <> 0 THEN
+// 			jsonNode := fbJson.FindMember(jsonSize, 'X');
+// 			IF jsonNode <> 0 THEN stResult.Cavities.LevelReference2.Size.X := fbJson.GetDouble(jsonNode); END_IF
+// 			jsonNode := fbJson.FindMember(jsonSize, 'Y');
+// 			IF jsonNode <> 0 THEN stResult.Cavities.LevelReference2.Size.Y := fbJson.GetDouble(jsonNode); END_IF
+// 		END_IF
+// 	END_IF
+// 
+// END_IF // jsonCavities
+
+### __shared_data_storage_string_table__.auxiliary (969)
+
+// 	jsonLvlRef1 := fbJson.FindMember(jsonCavities, 'LevelReference1');
+// 	IF jsonLvlRef1 <> 0 THEN
+// 		jsonOffset := fbJson.FindMember(jsonLvlRef1, 'Offset');
+// 		IF jsonOffset <> 0 THEN
+// 			jsonNode := fbJson.FindMember(jsonOffset, 'X');
+// 			IF jsonNode <> 0 THEN stResult.Cavities.LevelReference1.Offset.X := fbJson.GetDouble(jsonNode); END_IF
+// 			jsonNode := fbJson.FindMember(jsonOffset, 'Y');
+// 			IF jsonNode <> 0 THEN stResult.Cavities.LevelReference1.Offset.Y := fbJson.GetDouble(jsonNode); END_IF
+// 		END_IF
+// 
+// 		jsonSize := fbJson.FindMember(jsonLvlRef1, 'Size');
+// 		IF jsonSize <> 0 THEN
+// 			jsonNode := fbJson.FindMember(jsonSize, 'X');
+// 			IF jsonNode <> 0 THEN stResult.Cavities.LevelReference1.Size.X := fbJson.GetDouble(jsonNode); END_IF
+// 			jsonNode := fbJson.FindMember(jsonSize, 'Y');
+// 			IF jsonNode <> 0 THEN stResult.Cavities.LevelReference1.Size.Y := fbJson.GetDouble(jsonNode); END_IF
+// 		END_IF
+// 	END_IF
+// 
+// 	// 
+
+### __shared_data_storage_string_table__.auxiliary (873)
+(*FB_Init is always available implicitly and it is used primarily for initialization.
+The return value is not evaluated. For a specific influence, you can also declare the
+methods explicitly and provide additional code there with the standard initialization
+code. You can evaluate the return value.*)
+METHOD FB_Init : BOOL
+VAR_INPUT
+	(* TRUE: the retain variables are initialized (reset warm / reset cold)*)
+	bInitRetains	: BOOL;
+	(* TRUE: the instance will be copied to the copy code afterward (online change)   *)
+	bInCopyCode	: BOOL;
+	Name	: Core.T_MaxString;
+	SysSts : REFERENCE TO SystemStatus;
+	SysStsBytes : REFERENCE TO ARRAY[0..29] OF BYTE;
+	WaferResults : REFERENCE TO ARRAY[0..199] OF WaferResultStruct;
+	SysWaferResultsBytes : REFERENCE TO ARRAY[0..719] OF BYTE;
+END_VAR
+f10f38638f-4bc1-4511-b9b3-5a44d67924e7_Decl_LineIdsg$dc018666-729f-47db-88f5-efbfbd88aa4dh
+
+### __shared_data_storage_string_table__.auxiliary (854)
+FUNCTION_BLOCK Wafer_Module_HMI EXTENDS StateControllerHMI
+VAR
+	MyModule : I_WaferInspectionModule;
+	{attribute 'TcHmiSymbol.AddSymbol'}
+	hmiControl : SystemControl;
+	{attribute 'TcHmiSymbol.AddSymbol'}
+	hmiStatus : SystemStatus;
+	{ attribute 'TcHmiSymbol.AddSymbol' }
+	SKUBarRecipe : SkuBarCavityRecipe;
+	{ attribute 'TcHmiSymbol.AddSymbol' }
+	CavityRecipe : BarCavityRecipe;
+	{ attribute 'TcHmiSymbol.AddSymbol' }
+	WaferRecipe : WaferInspectionRecipe;
+	{ attribute 'TcHmiSymbol.AddSymbol' }
+	CameraRecipe : CameraSettingsRecipe;
+	{ attribute 'TcHmiSymbol.AddSymbol' }
+	PixelRecipe : PixelCalibration;
+	{ attribute 'TcHmiSymbol.AddSymbol' }
+	VisionProcessRecipe : WaferDetectionVisionRecipe;
+	{ attribute 'TcHmiSymbol.AddSymbol'}
+	InvalidRecipeLoaded : BOOL;
+	{ attribute 'TcHmiSymbol.AddSymbol'}
+	hmiWaferResultsStatus : WaferResultStatistics;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (837)
+//======================================================================
+// VISION PROCESS  (WaferDetectionVisionRecipe)
+//======================================================================
+jsonVision := fbJson.FindMember(jsonRoot, 'VisionProcess');
+IF jsonVision <> 0 THEN
+
+	jsonNode := fbJson.FindMember(jsonVision, 'MedianFilterSize');
+	IF jsonNode <> 0 THEN stResult.VisionProcess.MedianFilterSize := DINT_TO_UDINT(fbJson.GetInt(jsonNode)); END_IF
+
+	jsonNode := fbJson.FindMember(jsonVision, 'OcclusionMaxLimit');
+	IF jsonNode <> 0 THEN stResult.VisionProcess.OcclusionMaxLimit := DINT_TO_UINT(fbJson.GetInt(jsonNode)); END_IF
+
+	jsonNode := fbJson.FindMember(jsonVision, 'ReflectionMaxLimit');
+	IF jsonNode <> 0 THEN stResult.VisionProcess.ReflectionMaxLimit := DINT_TO_UINT(fbJson.GetInt(jsonNode)); END_IF
+
+END_IF // jsonVision
+
+### __shared_data_storage_string_table__.auxiliary (802)
+FUNCTION_BLOCK Idle EXTENDS Vanguard.State
+VAR
+	_stateMachine : I_IdleTransitions;
+	ChannelControl : I_VisionChannelControl;
+	_RecipeLoaded : REFERENCE TO BOOL;
+	_SKUBarRecipe : REFERENCE TO SkuBarCavityRecipe;
+	_CavityRecipe : REFERENCE TO BarCavityRecipe;
+	_WaferRecipe : REFERENCE TO WaferInspectionRecipe;
+	_CameraRecipe : REFERENCE TO CameraSettingsRecipe;
+	_PixelRecipe : REFERENCE TO PixelCalibration;
+	_VisionProcessRecipe : REFERENCE TO WaferDetectionVisionRecipe;
+	_Process : I_ProcessSKU;
+	IdleState : UINT;
+	RecipeRecieveTimer : TON := (PT := T#1S);
+	_MachineCtrl : REFERENCE TO SystemControl;
+	_MachineStatus : REFERENCE TO SystemStatus;
+	_Ups_Persistent : I_PersistenDataandUPS;
+	{ attribute 'TcHmiSymbol.AddSymbol' }
+	RecipeActivated : BOOL;
+	_InValidRecipe : REFERENCE TO BOOL;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (778)
+(*FB_Init is always available implicitly and it is used primarily for initialization.
+The return value is not evaluated. For a specific influence, you can also declare the
+methods explicitly and provide additional code there with the standard initialization
+code. You can evaluate the return value.*)
+METHOD FB_Init : BOOL
+VAR_INPUT
+	(* TRUE: the retain variables are initialized (reset warm / reset cold)*)
+	bInitRetains	: BOOL;
+	(* TRUE: the instance will be copied to the copy code afterward (online change)   *)
+	bInCopyCode	: BOOL;
+	Name	: Core.T_MaxString;
+	VisionChannel: I_VisionChannel; 
+	Process : I_ProcessSKU;
+	IO_Ctrl : REFERENCE TO SystemControl;
+	IO_Status : REFERENCE TO SystemStatus;
+	WaferResultArray : reference TO ARRAY[0..199] OF WaferResultStruct;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (760)
+//Class to encode the wafer Data sent through EIP
+//Class takes a reference to the EIP bytes and the systemStatus struct and wafer results struct
+//Class encodes the data into the byte array
+//Class needs calling cyclically
+FUNCTION_BLOCK EncodeBeckhoffData EXTENDS cycliccomponent
+VAR
+	_SystemStatusBytes : REFERENCE TO ARRAY[0..29] OF BYTE;
+	_SystemStatus : REFERENCE TO SystemStatus;
+	_WaferResultBytes : ARRAY[0..4] OF BYTE;
+	_SystemWaferResultsBytes : REFERENCE TO ARRAY[0..719] OF BYTE;
+	_WaferResults : REFERENCE TO ARRAY[0..199] OF WaferResultStruct;
+	UINTBYTEConversion : BYTE_UINT;
+	UDINTBYTEConversion : BYTE_UDINT;
+	STRING20BYTEConversion : BYTE_STRING20;
+	REALBYTEConversion : BYTE_REAL;
+END_VAR\1bec6858a-d9c4-44b6-bfc1-527ae0f6dfad_Decl_LineIds]
+
+### __shared_data_storage_string_table__.auxiliary (734)
+(*FB_Init is always available implicitly and it is used primarily for initialization.
+The return value is not evaluated. For a specific influence, you can also declare the
+methods explicitly and provide additional code there with the standard initialization
+code. You can evaluate the return value.*)
+METHOD FB_Init : BOOL
+VAR_INPUT
+	(* TRUE: the retain variables are initialized (reset warm / reset cold)*)
+	bInitRetains	: BOOL;
+	(* TRUE: the instance will be copied to the copy code afterward (online change)   *)
+	bInCopyCode	: BOOL;
+	Name	: Core.T_MaxString;
+	SysCtrl : REFERENCE TO SystemControl;
+	SysCtrlByte : REFERENCE TO BYTE;
+END_VAR
+W150864fda-150e-4a42-81e7-c96f32ffe73b_Decl_LineIdsX$bec6858a-d9c4-44b6-bfc1-527ae0f6dfadY
+
+### __shared_data_storage_string_table__.auxiliary (723)
+
+// 	jsonSkuCavArr := fbJson.FindMember(jsonSKU, 'Cavities');
+// 	IF jsonSkuCavArr <> 0 THEN
+// 		nCavCount := MIN(fbJson.GetArraySize(jsonSkuCavArr), 250);
+// 		jsonSkuCavItem := fbJson.ArrayBegin(jsonSkuCavArr);
+// 		FOR nCavIdx := 0 TO nCavCount - 1 DO
+// 			IF jsonSkuCavItem <> 0 THEN
+// 				jsonNode := fbJson.FindMember(jsonSkuCavItem, 'X');
+// 				IF jsonNode <> 0 THEN stResult.SKU.Cavities[nCavIdx].X := fbJson.GetDouble(jsonNode); END_IF
+// 
+// 				jsonNode := fbJson.FindMember(jsonSkuCavItem, 'Y');
+// 				IF jsonNode <> 0 THEN stResult.SKU.Cavities[nCavIdx].Y := fbJson.GetDouble(jsonNode); END_IF
+// 
+// 				jsonSkuCavItem := fbJson.NextArray(jsonSkuCavItem);
+// 			END_IF
+// 		END_FOR
+// 	END_IF
+// 
+// 	// 
+
+### __shared_data_storage_string_table__.auxiliary (693)
+// Assign the Wafer Status data into the byte array for a wafer
+// each wafer transfers 5 bytes of data
+_WaferResultBytes[0].0 := CurrentWafer.WaferStatus;
+_WaferResultBytes[0].1 := CurrentWafer.PluggedCavity;
+
+_WaferResultBytes[1] := TO_BYTE(CurrentWafer.WaferNumberInMould);
+
+_WaferResultBytes[2] := TO_BYTE(CurrentWafer.RowNumber);
+
+_WaferResultBytes[3] := TO_BYTE(CurrentWafer.ColumnNumber);
+
+_WaferResultBytes[4] := TO_BYTE(CurrentWafer.WaferNumberInBar);
+
+
+j1dc018666-729f-47db-88f5-efbfbd88aa4d_Impl_LineIdskWMETHOD ProcessAWaferForEIP : BOOL
+VAR_INPUT
+	CurrentWafer : WaferResultStruct;
+END_VAR
+l1dc018666-729f-47db-88f5-efbfbd88aa4d_Decl_LineIdsm$e2c8c3ff-2f08-4008-8f74-a2110cb38b56n
+
+### __shared_data_storage_string_table__.auxiliary (615)
+//FB_Init is always available implicitly and it is used primarily for initialization.
+//The return value is not evaluated. For a specific influence, you can also declare the
+//methods explicitly and provide additional code there with the standard initialization
+//code. You can evaluate the return value.
+METHOD FB_Init: BOOL
+VAR_INPUT
+    bInitRetains: BOOL; // TRUE: the retain variables are initialized (reset warm / reset cold)
+    bInCopyCode: BOOL;  // TRUE: the instance will be copied to the copy code afterward (online change)   
+	WaferResultArray : reference TO ARRAY[0..199] OF WaferResultStruct;
+END_VAR
+
+### __shared_data_storage_string_table__.auxiliary (612)
+FUNCTION_BLOCK ExecuteProduction EXTENDS Vanguard.State
+VAR
+	_stateMachine : I_ExecuteTranisitons;
+	ChannelControl : I_VisionChannelControl;
+	_MachineCtrl : REFERENCE TO SystemControl;
+	_MachineStatus : REFERENCE TO SystemStatus;
+	OperatingState : INT;
+	_SKURecipe : REFERENCE TO SkuBarCavityRecipe;
+	_WaferResults : REFERENCE TO ARRAY[0..199] OF WaferResultStruct;
+	_WaferResultStatus : REFERENCE TO WaferResultStatistics;
+	Last10SkuCounter : SINT;
+	Last10SKUPassCounts : ARRAY[0..9] OF SINT;
+	TotalPassed : UDINT;
+	TotalFailed : UDINT;
+	FailingImages : ARRAY[0..59] OF INT;
+	FailingImageCounter : INT;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (593)
+TYPE SKUInternalDiagnosticStruct :
+STRUCT
+	ImageInfo : TcVnImageInfo;
+	ImageMedianValue : UDINT;
+	MouldInRange : BOOL;
+	MouldMaxLevel : LREAL;
+	MouldMinLevel : LREAL;
+	TopEdgePoints: ITcVnContainer;
+	LeftEdgePoints: ITcVnContainer;
+	TopLine: TcVnVector4_LREAL;
+	LeftLine: TcVnVector4_LREAL;
+	LineIntersectionPoint: Tc3_Vision.TcVnPoint2_REAL;
+	IntersectionAngle: REAL;
+	reflectionPixels : ULINT;
+	occlusionPixel : ULINT;
+	PercentageReflection : LREAL;
+	PercentageOcclusion : LREAL;
+	ReflectionOcclusionInRange : BOOL;
+	FullImagePixelCount : ULINT;
+	IdealWaferArea : LREAL;
+END_STRUCT
+END_TYPE
+
+
+### __shared_data_storage_string_table__.auxiliary (592)
+//======================================================================
+// CAMERA  (CameraRecipe)
+//======================================================================
+jsonCamera := fbJson.FindMember(jsonRoot, 'Camera');
+IF jsonCamera <> 0 THEN
+
+	jsonNode := fbJson.FindMember(jsonCamera, 'ExposureTime');
+	IF jsonNode <> 0 THEN stResult.Camera.ExposureTime := DINT_TO_UDINT(fbJson.GetInt(jsonNode)); END_IF
+
+	jsonNode := fbJson.FindMember(jsonCamera, 'RulerLines');
+	IF jsonNode <> 0 THEN stResult.Camera.RulerLines := DINT_TO_UDINT(fbJson.GetInt(jsonNode)); END_IF
+
+END_IF // jsonCamera
+
+### __shared_data_storage_string_table__.auxiliary (584)
+//FB_Init is always available implicitly and it is used primarily for initialization.
+//The return value is not evaluated. For a specific influence, you can also declare the
+//methods explicitly and provide additional code there with the standard initialization
+//code. You can evaluate the return value.
+METHOD FB_Init: BOOL
+VAR_INPUT
+    bInitRetains: BOOL; // TRUE: the retain variables are initialized (reset warm / reset cold)
+    bInCopyCode: BOOL;  // TRUE: the instance will be copied to the copy code afterward (online change)   
+	StateMachine : I_AbortedTransitions;
+END_VAR
+
+### __shared_data_storage_string_table__.auxiliary (584)
+//FB_Init is always available implicitly and it is used primarily for initialization.
+//The return value is not evaluated. For a specific influence, you can also declare the
+//methods explicitly and provide additional code there with the standard initialization
+//code. You can evaluate the return value.
+METHOD FB_Init: BOOL
+VAR_INPUT
+    bInitRetains: BOOL; // TRUE: the retain variables are initialized (reset warm / reset cold)
+    bInCopyCode: BOOL;  // TRUE: the instance will be copied to the copy code afterward (online change)   
+	StateMachine : I_ExecuteTranisitons;
+END_VAR
+
+### __shared_data_storage_string_table__.auxiliary (584)
+//FB_Init is always available implicitly and it is used primarily for initialization.
+//The return value is not evaluated. For a specific influence, you can also declare the
+//methods explicitly and provide additional code there with the standard initialization
+//code. You can evaluate the return value.
+METHOD FB_Init: BOOL
+VAR_INPUT
+    bInitRetains: BOOL; // TRUE: the retain variables are initialized (reset warm / reset cold)
+    bInCopyCode: BOOL;  // TRUE: the instance will be copied to the copy code afterward (online change)   
+	StateMachine : I_StoppedTransitions;
+END_VAR
+
+### __shared_data_storage_string_table__.auxiliary (582)
+METHOD SetDependencies : BOOL
+VAR_INPUT
+	Control : I_VisionChannelControl;
+	SKUBar : REFERENCE TO SkuBarCavityRecipe;
+	Cavity : REFERENCE TO BarCavityRecipe;
+	Wafer : REFERENCE TO WaferInspectionRecipe;
+	Camera : REFERENCE TO CameraSettingsRecipe;
+	Pixel : REFERENCE TO PixelCalibration;
+	VisionProcess : REFERENCE TO WaferDetectionVisionRecipe;
+	Process : I_ProcessSKU;
+	MachineCtrl : REFERENCE TO SystemControl;
+	MachineStatus : REFERENCE TO SystemStatus;
+	Ups_Persistent : I_PersistenDataandUPS;
+	InValidRecipe : REFERENCE TO BOOL;
+	RecipeLoadedFlag : REFERENCE TO BOOL;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (581)
+//FB_Init is always available implicitly and it is used primarily for initialization.
+//The return value is not evaluated. For a specific influence, you can also declare the
+//methods explicitly and provide additional code there with the standard initialization
+//code. You can evaluate the return value.
+METHOD FB_Init: BOOL
+VAR_INPUT
+    bInitRetains: BOOL; // TRUE: the retain variables are initialized (reset warm / reset cold)
+    bInCopyCode: BOOL;  // TRUE: the instance will be copied to the copy code afterward (online change)   
+	StateMachine : I_IdleTransitions;
+END_VAR
+
+### __shared_data_storage_string_table__.auxiliary (432)
+TYPE WaferResultStruct :
+STRUCT
+	WaferNumberInMould : USINT;
+	RowNumber : USINT;
+	ColumnNumber : USINT;
+	WaferNumberInBar : USINT;
+	WaferStatus : BOOL; 
+	WaferWidth : REAL; 
+	WaferLength : REAL;
+	PercentageWaferInCavity : REAL;
+	WaferAngleInDegrees : REAL;
+	SDWaferHeight : REAL;
+	MeanWaferHeight : REAL;
+	WaferCavityOffset : CoOrd_Real; 
+	PluggedCavity : BOOL;
+	WaferLaminatePercentages : ARRAY[0..3] OF LREAL;
+END_STRUCT
+END_TYPE
+
+
+### __shared_data_storage_string_table__.auxiliary (425)
+SUPER^.CyclicLogic();
+
+MyModule.Control := hmiControl;
+hmiStatus := MyModule.Status;
+MyModule.CavityRecipe := CavityRecipe;
+MyModule.CameraRecipe := CameraRecipe;
+MyModule.InvalidRecipeLoaded := InvalidRecipeLoaded;
+MyModule.PixelRecipe := PixelRecipe;
+MyModule.SKURecipe := SKUBarRecipe;
+MyModule.VisionRecipe := VisionProcessRecipe;
+MyModule.WaferRecipe := WaferRecipe;
+hmiWaferResultsStatus := MyModule.WaferResultsStatus;
+
+### __shared_data_storage_string_table__.auxiliary (411)
+//Class to decode the Rockwell Data sent through EIP
+//Class takes a reference to the EIP byte and the systemControl struct
+//Class decodes the EIP byte into the struct
+//Class needs calling cyclically
+FUNCTION_BLOCK DecodeRockwellData EXTENDS CyclicComponent
+VAR
+	_SystemControlByte : REFERENCE TO BYTE;
+	_SystemControl : REFERENCE TO SystemControl;
+END_VAR
+H12b90ef43-3280-473c-b5f4-36eabf3be259_Decl_LineIdsI
+
+### __shared_data_storage_string_table__.auxiliary (399)
+CASE StartupState OF
+// 	0: //Unknown conditions
+// 		IF SUCCEEDED(GVL_Vision.LabelProcess.LoadRecipe(WaferDetectRecipe)) THEN
+// 			SystemReady := TRUE;
+// 			StartupState := 1;
+// 		END_IF
+
+	0:
+		IF ChannelControl.StartVision() THEN
+			StartupState := 1;
+		END_IF
+	1:
+		_MachineStatus.SystemReady := FALSE;
+		_MachineStatus.SystemRunning := TRUE;
+		StartupState := 0;
+		Executing := TRUE;
+END_CASE
+
+### __shared_data_storage_string_table__.auxiliary (395)
+FOR i := 0 TO _SystemStatus.TotalWafers - 1 DO
+	ProcessAWaferForEIP(CurrentWafer := _WaferResults[i]);
+	FOR j := 0 TO 4 DO
+		_SystemWaferResultsBytes[j + 5*i] := _WaferResultBytes[j];
+	END_FOR
+END_FORv11916a83d-044a-42e7-96f7-77c8c6d2aa51_Impl_LineIdsw4METHOD ProcessWaferResults
+VAR
+	i,j : UINT;
+END_VAR
+x11916a83d-044a-42e7-96f7-77c8c6d2aa51_Decl_LineIdsy$5fd60a84-f4f6-4858-ad2d-153d6608001az
+
+### __shared_data_storage_string_table__.auxiliary (392)
+ChannelControl := Control;
+_SKUBarRecipe REF= SKUBar;
+_CavityRecipe REF= Cavity;
+_WaferRecipe REF= Wafer;
+_CameraRecipe REF= Camera;
+_PixelRecipe REF= Pixel;
+_VisionProcessRecipe REF= VisionProcess;
+_Process := Process;
+_MachineCtrl REF= MachineCtrl;
+_MachineStatus REF= MachineStatus;
+_Ups_Persistent := Ups_Persistent;
+_InValidRecipe REF= InValidRecipe;
+_RecipeLoaded REF= RecipeLoadedFlag;
+
+### __shared_data_storage_string_table__.auxiliary (378)
+skuTrigger(CLK := DummySKUDetectedSignal);
+CASE OperatingState OF 
+	0:
+		IF skuTrigger.Q THEN
+			ChannelControl.TriggerImage();
+			OperatingState := 1;
+		END_IF
+	1:
+		IF ChannelControl.ImageProcessing THEN
+			OperatingState := 2;
+		END_IF
+	2:
+		IF ChannelControl.ImageProcessingCompletedSuccessfully THEN
+			OperatingState := 0;
+		ELSE
+			OperatingState := 99;
+		END_IF
+END_CASE
+
+### __shared_data_storage_string_table__.auxiliary (338)
+METHOD SetDependencies : BOOL
+VAR_INPUT
+	Control : I_VisionChannelControl;
+	MachineCtrl : REFERENCE TO SystemControl;
+	MachineStatus : REFERENCE TO SystemStatus;
+	WaferResults : REFERENCE TO ARRAY[0..199] OF WaferResultStruct;
+	WaferResultStatus : REFERENCE TO WaferResultStatistics;
+	SKURecipe : REFERENCE TO SkuBarCavityRecipe;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (319)
+METHOD PROTECTED GetCameraData : BOOL
+VAR
+	jsonRoot        : SJsonValue;
+    jsonNode        : SJsonValue;
+    jsonSKU         : SJsonValue;
+    jsonCavities    : SJsonValue;
+    jsonWafer       : SJsonValue;
+    jsonCamera      : SJsonValue;
+    jsonPixels      : SJsonValue;
+    jsonVision      : SJsonValue;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (319)
+METHOD PROTECTED GetVisionData : BOOL
+VAR
+	jsonRoot        : SJsonValue;
+    jsonNode        : SJsonValue;
+    jsonSKU         : SJsonValue;
+    jsonCavities    : SJsonValue;
+    jsonWafer       : SJsonValue;
+    jsonCamera      : SJsonValue;
+    jsonPixels      : SJsonValue;
+    jsonVision      : SJsonValue;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (318)
+METHOD PROTECTED GetPixelData : BOOL
+VAR
+	jsonRoot        : SJsonValue;
+    jsonNode        : SJsonValue;
+    jsonSKU         : SJsonValue;
+    jsonCavities    : SJsonValue;
+    jsonWafer       : SJsonValue;
+    jsonCamera      : SJsonValue;
+    jsonPixels      : SJsonValue;
+    jsonVision      : SJsonValue;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (318)
+METHOD PROTECTED GetWaferData : BOOL
+VAR
+	jsonRoot        : SJsonValue;
+    jsonNode        : SJsonValue;
+    jsonSKU         : SJsonValue;
+    jsonCavities    : SJsonValue;
+    jsonWafer       : SJsonValue;
+    jsonCamera      : SJsonValue;
+    jsonPixels      : SJsonValue;
+    jsonVision      : SJsonValue;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (314)
+METHOD PROTECTED GetCavitiesData
+VAR
+	jsonRoot        : SJsonValue;
+    jsonNode        : SJsonValue;
+    jsonSKU         : SJsonValue;
+    jsonCavities    : SJsonValue;
+    jsonWafer       : SJsonValue;
+    jsonCamera      : SJsonValue;
+    jsonPixels      : SJsonValue;
+    jsonVision      : SJsonValue;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (287)
+//Calls the methods responsible for handling assignment
+IF _SystemStatus.SystemRunning THEN
+	ProcessWaferResults();
+END_IF
+ProcessStatusForEIP();
+`150797dbf-3a17-482a-a7a5-d8686c665bc7_Impl_LineIdsa150797dbf-3a17-482a-a7a5-d8686c665bc7_Decl_LineIdsb$0f38638f-4bc1-4511-b9b3-5a44d67924e7c
+
+### __shared_data_storage_string_table__.auxiliary (275)
+METHOD LoadRecipe : HRESULT
+VAR_INPUT
+	SKUBarRecipe : SkuBarCavityRecipe;
+	CavityRecipe : BarCavityRecipe;
+	WaferRecipe : WaferInspectionRecipe;
+	CameraRecipe : CameraSettingsRecipe;
+	PixelRecipe : PixelCalibration;
+	VisionProcessRecipe : WaferDetectionVisionRecipe;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (275)
+TYPE WaferResultStatistics :
+STRUCT
+	PassingWafersThisSku : UINT;
+	FailedWafersThisSku : UINT;
+	PassingWaferPercentageTotal : LREAL;
+	PassingWaferPercentageLAst10Skus : LREAL;
+	FailedWaferPercentageTotal : LREAL;
+	FailedWaferPercentageLast10Skus : LREAL;
+END_STRUCT
+END_TYPE
+
+
+### __shared_data_storage_string_table__.auxiliary (263)
+FUNCTION_BLOCK ExecuteManual EXTENDS Vanguard.State
+VAR
+	_stateMachine : I_ExecuteTranisitons;
+	ChannelControl : I_VisionChannelControl;
+	OperatingState : INT;
+	DummySKUDetectedSignal : BOOL;
+	startTrig : R_TRIG;
+	stopTrig : R_TRIG;
+	skuTrigger : R_TRIG;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (243)
+FUNCTION_BLOCK WaferRecipeReader EXTENDS Component
+VAR
+	fbJson          : FB_JsonDomParser;
+	stResult : REFERENCE TO WaferInspection;
+	sFilePath : STRING := 'D:\10 Projects\_30040_Nestle\Cust_Nestle_Vanguard\Recipes\KitKatChunky.txt';
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (231)
+VisionRecipe.SKU := SKUBarRecipe;
+VisionRecipe.Pixels := PixelRecipe;
+VisionRecipe.Camera := CameraRecipe;
+VisionRecipe.Cavities := CavityRecipe;
+VisionRecipe.VisionProcess := VisionProcessRecipe;
+VisionRecipe.Wafer := WaferRecipe;
+
+### __shared_data_storage_string_table__.auxiliary (214)
+CASE ShutdownState OF		
+	0: //unkown conditions
+		IF ChannelControl.StopVision() THEN
+			ShutdownState := 1;
+		END_IF
+	1:
+		_MachineStatus.SystemRunning := FALSE;
+		Executing := TRUE;
+		ShutdownState := 0;
+END_CASE
+
+### __shared_data_storage_string_table__.auxiliary (200)
+_SystemStatus REF= SysSts;
+_SystemStatusBytes REF= SysStsBytes;
+_SystemWaferResultsBytes REF= SysWaferResultsBytes;
+_WaferResults REF= WaferResults;d10f38638f-4bc1-4511-b9b3-5a44d67924e7_Impl_LineIdse
+
+### __shared_data_storage_string_table__.auxiliary (195)
+ChannelControl := Control;
+_MachineCtrl REF= MachineCtrl;
+_MachineStatus REF= MachineStatus;
+_WaferResults REF= WaferResults;
+_WaferResultStatus REF= WaferResultStatus;
+_SKURecipe REF= SKURecipe;
+
+### __shared_data_storage_string_table__.auxiliary (182)
+ChannelControl.SetDependencies(VisionChannel);
+Channel := VisionChannel;
+SKUProcess := Process;
+_IO_Ctrl REF= IO_Ctrl;
+_IO_Status REF= IO_Status;
+_WaferResults REF= WaferResultArray;
+
+### __shared_data_storage_string_table__.auxiliary (171)
+DecodeRockwellDataA$829a18f2-c514-4f6e-9634-1df173429203B$6f9dac99-8de1-4efc-8465-68ac443b7d08C$a9ed5b7e-75c5-4651-af16-d2c27e98cb94D$3b83b776-fb25-43b8-99f2-3c507c9143fcE
+
+### __shared_data_storage_string_table__.auxiliary (168)
+FUNCTION_BLOCK Stopping EXTENDS Vanguard.State
+VAR
+	ShutdownState : INT;
+	ChannelControl : I_VisionChannelControl;
+	_MachineStatus : REFERENCE TO SystemStatus;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (167)
+FUNCTION_BLOCK Starting EXTENDS Vanguard.State
+VAR
+	StartupState : INT;
+	ChannelControl : I_VisionChannelControl;
+	_MachineStatus : REFERENCE TO SystemStatus;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (158)
+METHOD Process : HRESULT
+VAR_INPUT
+	Image	: REFERENCE TO CoreVision.ITcVnImage;
+	hrPrev : HRESULT;
+END_VAR
+VAR
+	i : uINT;
+	Pixels: ULINT;
+	Sum: LREAL;
+END_VAR
+
+### __shared_data_storage_string_table__.auxiliary (153)
+(* This Module will be done initialize when ModuleInitialized := TRUE;, subequently all subitems will be called to be initialized *)
+METHOD Initializing
+
+
+### __shared_data_storage_string_table__.auxiliary (141)
+// IF fbJson.LoadDocumentFromFile(sFilePath, TRUE) THEN
+// 	fbJson.LoadDocumentFromFile(sFilePath, FALSE);
+// 	GetDocument := TRUE;
+// END_IF
+
+### __shared_data_storage_string_table__.auxiliary (139)
+FUNCTION_BLOCK Stopped EXTENDS Vanguard.State
+VAR
+	_stateMachine : I_StoppedTransitions;
+	ChannelControl : I_VisionChannelControl;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (127)
+METHOD SetDependencies : BOOL
+VAR_INPUT
+	Control : I_VisionChannelControl;
+	MachineStatus : REFERENCE TO SystemStatus;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (122)
+yMETHOD PROTECTED GetSKUData : BOOL
+VAR
+	jsonRoot : SJsonValue;
+    jsonNode : SJsonValue;
+	jsonSKU : SJsonValue;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (120)
+wMETHOD Executing : BOOL
+VAR
+	i : UINT;
+	PassingCount : SINT;
+	FailedCount : SINT;
+	SumPassingCountLast10 : INT;
+END_VAR
+
+### __shared_data_storage_string_table__.auxiliary (109)
+METHOD CyclicLogic
+Q1733dcb42-7915-4844-a7ce-be57d91dc38b_Decl_LineIdsR$50864fda-150e-4a42-81e7-c96f32ffe73bS
+
+### __shared_data_storage_string_table__.auxiliary (100)
+cFUNCTION_BLOCK Aborted EXTENDS Vanguard.State
+VAR
+	_stateMachine : I_AbortedTransitions;
+	
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (97)
+I_WaferInspectionModule}$6654496c-404d-479a-aad2-8551054e5f1e~"INTERFACE I_WaferInspectionModule
+
+
+### __shared_data_storage_string_table__.auxiliary (94)
+]METHOD SetDependencies : BOOL
+VAR_INPUT
+	WaferStruct : REFERENCE TO WaferInspection;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (84)
+SMETHOD SetDependencies : BOOL
+VAR_INPUT
+	Control : I_VisionChannelControl;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (78)
+MMETHOD SetModule : BOOL
+VAR_INPUT
+	Module : I_WaferInspectionModule;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (78)
+MMETHOD PRIVATE GetDocument : BOOL
+VAR
+	jsonRoot        : SJsonValue;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (70)
+EncodeBeckhoffDataZ1bec6858a-d9c4-44b6-bfc1-527ae0f6dfad_Impl_LineIds[
+
+### __shared_data_storage_string_table__.auxiliary (65)
+@METHOD LoadRecipe : BOOL
+VAR_INPUT
+	sFilePath : STRING;
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (52)
+3PROPERTY WaferResultsStatus : WaferResultStatistics
+
+### __shared_data_storage_string_table__.auxiliary (51)
+2PROPERTY VisionRecipe : WaferDetectionVisionRecipe
+
+### __shared_data_storage_string_table__.auxiliary (50)
+CyclicLogicM$f8a58466-d7f6-439f-bbb8-d4600e41d099N
+
+### __shared_data_storage_string_table__.auxiliary (45)
+,PROPERTY CameraRecipe : CameraSettingsRecipe
+
+### __shared_data_storage_string_table__.auxiliary (45)
+,PROPERTY WaferRecipe : WaferInspectionRecipe
+
+### __shared_data_storage_string_table__.auxiliary (43)
+*WaferResultsStatus := _WaferResultsStatus;
+
+### __shared_data_storage_string_table__.auxiliary (40)
+'PROPERTY SKURecipe : SkuBarCavityRecipe
+
+### __shared_data_storage_string_table__.auxiliary (38)
+%_VisionProcessRecipe := VisionRecipe;
+
+### __shared_data_storage_string_table__.auxiliary (36)
+#METHOD CyclicLogic
+VAR_INST
+END_VAR
+
+### __shared_data_storage_string_table__.auxiliary (36)
+#WaferResults REF= WaferResultArray;
+
+### __shared_data_storage_string_table__.auxiliary (33)
+ Nestle Vanguard Wafer Inspection
+
+### __shared_data_storage_string_table__.auxiliary (30)
+_CameraRecipe := CameraRecipe;
+
+### __shared_data_storage_string_table__.auxiliary (29)
+WaferInternalDiagnosticStruct
+
+### __shared_data_storage_string_table__.auxiliary (28)
+_WaferRecipe := WaferRecipe;
+
+### __shared_data_storage_string_table__.auxiliary (27)
+_SKUBarRecipe := SKURecipe;
+
+### __shared_data_storage_string_table__.auxiliary (27)
+SKUInternalDiagnosticStruct
+
+### __shared_data_storage_string_table__.auxiliary (26)
+stResult REF= WaferStruct;
+
+### __shared_data_storage_string_table__.auxiliary (24)
+METHOD Executing : BOOL
+
+
+### __shared_data_storage_string_table__.auxiliary (23)
+Vanguard_WaferDetection
+
+### __shared_data_storage_string_table__.auxiliary (23)
+Wafer_Inspection_Module
+
+### __shared_data_storage_string_table__.auxiliary (23)
+INTERFACE I_ProcessSKU
+
+
+### __shared_data_storage_string_table__.auxiliary (21)
+WaferResultStatistics
+
+### __shared_data_storage_string_table__.auxiliary (20)
+ProcessAWaferForEIPi
+
+### __shared_data_storage_string_table__.auxiliary (20)
+ProcessStatusForEIPo
+
+### __shared_data_storage_string_table__.auxiliary (20)
+ProcessWaferResultsu
+
+### __shared_data_storage_string_table__.auxiliary (20)
+METHOD OnCyclicCall
+
+
+### __shared_data_storage_string_table__.auxiliary (18)
+WaferResultsStatus
+
+### __shared_data_storage_string_table__.auxiliary (17)
+WaferRecipeReader
+
+### __shared_data_storage_string_table__.auxiliary (17)
+WaferResultStruct
+
+### __shared_data_storage_string_table__.auxiliary (16)
+Wafer_Module_HMI
+
+### __shared_data_storage_string_table__.auxiliary (14)
+
+VAR
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (14)
+GetCameraData
+
+### __shared_data_storage_string_table__.auxiliary (12)
+CameraRecipe
+
+### __shared_data_storage_string_table__.auxiliary (12)
+VAR
+END_VAR
+
+
+### __shared_data_storage_string_table__.auxiliary (12)
+OnCyclicCall
+
+### __shared_data_storage_string_table__.auxiliary (12)
+I_ProcessSKU
+
+### __shared_data_storage_string_table__.auxiliary (12)
+GetWaferData

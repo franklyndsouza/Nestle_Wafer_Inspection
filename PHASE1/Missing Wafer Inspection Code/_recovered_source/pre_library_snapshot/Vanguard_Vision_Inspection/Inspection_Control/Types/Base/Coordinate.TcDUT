@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <DUT Name="Coordinate" Id="{f4188b48-0f81-459b-8804-da988f450db9}">
+    <Declaration><![CDATA[TYPE Coordinate :
+STRUCT
+	X : LREAL;
+	Y : LREAL;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

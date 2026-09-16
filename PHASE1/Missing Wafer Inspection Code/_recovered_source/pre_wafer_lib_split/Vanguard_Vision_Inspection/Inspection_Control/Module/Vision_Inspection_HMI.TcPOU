@@ -1,0 +1,61 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="Vision_Inspection_HMI" Id="{d1d46972-f2fd-4223-8233-5df0f2317bba}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK Vision_Inspection_HMI EXTENDS StateControllerHMI
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Property Name="ControlObject" Id="{b19ed197-897a-4f85-98a2-f1a3519f7b04}">
+      <Declaration><![CDATA[PROPERTY ControlObject : I_Base]]></Declaration>
+      <Set Name="Set" Id="{e7384cab-71c7-4c4d-9342-664ea9234160}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="CyclicLogic" Id="{31cd966e-8062-4cc6-89e1-b6a373b81562}">
+      <Declaration><![CDATA[METHOD CyclicLogic
+VAR_INST
+	StartRT : R_TRIG;
+	StopRT	: R_TRIG;
+	ResetRT : R_TRIG;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.CyclicLogic();
+
+// User buttons
+Statemachine_HMI.StartPermissive := Statemachine_HMI.CurrentState = E_PMLState.Idle;
+Statemachine_HMI.StopPermissive	 := Statemachine_HMI.CurrentState <> E_PMLState.Aborted;
+Statemachine_HMI.ResetPermissive := Statemachine_HMI.CurrentState = E_PMLState.Aborted OR Statemachine_HMI.CurrentState = E_PMLState.Stopped;
+StartRT(CLK := Statemachine_HMI.StartPressed);
+IF StartRT.Q THEN
+	_stateMachine.RequestStart();
+END_IF
+
+StopRT(CLK := Statemachine_HMI.StopPressed);
+IF StopRT.Q THEN
+	IF Statemachine_HMI.CurrentState = E_PMLState.Stopped THEN
+		_stateMachine.RequestAbort();
+	ELSE
+		_stateMachine.RequestStop();
+	END_IF
+END_IF
+
+ResetRT(CLK := Statemachine_HMI.ResetPressed);
+IF ResetRT.Q THEN
+	IF Statemachine_HMI.CurrentState = E_PMLState.Aborted THEN
+		_stateMachine.RequestClear();
+	ELSE
+		_stateMachine.RequestReset();
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,40 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="Stopping" Id="{4fde9158-fba4-42ed-b5ed-64b93305fb65}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK Stopping EXTENDS Vanguard_WaferDetection.State
+VAR
+	ShutdownState : INT;
+	ChannelControl : I_VisionChannelControl;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="Executing" Id="{4be63fc8-f26d-4763-b7b8-780de5f6f461}">
+      <Declaration><![CDATA[METHOD Executing : BOOL
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE ShutdownState OF		
+	0: //unkown conditions
+		IF ChannelControl.StopVision() THEN
+			ShutdownState := 1;
+		END_IF
+	1:
+		Executing := TRUE;
+		ShutdownState := 0;
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetDependencies" Id="{2ba7f496-ec23-4aee-8f61-426e3400d8f0}">
+      <Declaration><![CDATA[METHOD SetDependencies : BOOL
+VAR_INPUT
+	Control : I_VisionChannelControl;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[ChannelControl := Control;
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

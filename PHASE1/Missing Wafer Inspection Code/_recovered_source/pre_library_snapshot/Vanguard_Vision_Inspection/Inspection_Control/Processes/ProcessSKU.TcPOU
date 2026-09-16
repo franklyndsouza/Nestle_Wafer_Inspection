@@ -1,0 +1,64 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="ProcessSKU" Id="{53e45166-9b30-438a-9174-4d86e6b806c2}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK ProcessSKU EXTENDS ImageProcess
+VAR
+	workingImage : ITcVnImage;
+	display : ITcVnDisplayableImage;
+	VisionRecipe : WaferDetectionVisionRecipe;
+	Result: CoreVision.VisionResult;
+	ImageInfo: TcVnImageInfo;
+	ValidRecipe : BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="LoadRecipe" Id="{c2139310-be5a-48d9-a69b-c39253852a47}">
+      <Declaration><![CDATA[METHOD LoadRecipe : HRESULT
+VAR_INPUT
+	Recipe :  WaferDetectionVisionRecipe;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[ValidRecipe := FALSE;
+
+IF Recipe.MedianFilterSize = 0 THEN
+	LoadRecipe := -1;
+	RETURN;
+END_IF
+
+IF (Recipe.MedianFilterSize MOD 2) = 0 THEN
+	 LoadRecipe := -2;
+	 RETURN;
+END_IF
+
+VisionRecipe := Recipe;
+
+ValidRecipe := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Process" Id="{7f186188-ec86-4d91-9c8e-aced9fd8a56e}">
+      <Declaration><![CDATA[METHOD Process : HRESULT
+VAR_INPUT
+	Image	: REFERENCE TO CoreVision.ITcVnImage;
+	hrPrev : HRESULT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Image.GetImageInfo(ImageInfo);
+
+IF NOT ValidRecipe THEN
+	Trace.Error(Source := 'ProcessSKU', Message := 'Invlid Recipe for Vision');
+	RETURN;
+END_IF
+
+
+hrPrev := F_VN_MedianFilter(Image, workingImage, VisionRecipe.MedianFilterSize, hrPrev);
+
+Result := ProcessVisionResult(hrPrev);
+
+hrPrev := F_VN_CopyIntoDisplayableImage(workingImage, display, hrPrev);]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <DUT Name="CameraRecipe" Id="{9af1d9a7-afb1-42aa-9e4b-57e0a91690ee}">
+    <Declaration><![CDATA[TYPE CameraRecipe :
+STRUCT
+	ExposureTime : UDINT;
+	RulerLines : UDINT;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

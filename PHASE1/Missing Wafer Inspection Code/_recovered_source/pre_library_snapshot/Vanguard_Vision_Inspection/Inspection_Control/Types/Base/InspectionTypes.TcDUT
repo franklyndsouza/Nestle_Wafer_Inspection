@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <DUT Name="InspectionTypes" Id="{3c4044df-2651-4542-8848-e97abc250f5f}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'strict'}
+{attribute 'to_string'}
+TYPE InspectionTypes :
+(
+	WaferDetection := 0,
+	WaferMould := 1
+);
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>
